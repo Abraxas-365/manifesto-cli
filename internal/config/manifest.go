@@ -77,9 +77,8 @@ var ModuleRegistry = map[string]Module{
 	},
 	"ai": {
 		Name: "ai", Description: "LLM, embeddings, vector store, OCR, speech",
-		Paths: []string{"pkg/ai"}, Deps: []string{"errx"},
-	},
-}
+		Paths: []string{"pkg/ai"}, Deps: []string{"errx", "fsx"},
+	}}
 
 func CoreModules() []string {
 	var core []string
