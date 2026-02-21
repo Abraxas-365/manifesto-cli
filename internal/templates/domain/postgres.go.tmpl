@@ -39,10 +39,10 @@ func (r *Postgres{{ .EntityName }}Repository) GetByID(ctx context.Context, id ke
 	return &entity, nil
 }
 
-func (r *Postgres{{ .EntityName }}Repository) List(ctx context.Context, tenantID kernel.TenantID, opts kernel.PaginationOptions) (*kernel.Paginated[{{ .PackageName }}.{{ .EntityName }}], error) {
+func (r *Postgres{{ .EntityName }}Repository) List(ctx context.Context, tenantID kernel.TenantID, opts kernel.PaginationOptions) (kernel.Paginated[{{ .PackageName }}.{{ .EntityName }}], error) {
 	var total int
 	if err := r.db.QueryRowxContext(ctx, `SELECT COUNT(*) FROM {{ .TableName }} WHERE tenant_id = $1`, tenantID).Scan(&total); err != nil {
-		return nil, err
+		return kernel.Paginated[{{ .PackageName }}.{{ .EntityName }}]{}, err
 	}
 
 	offset := (opts.Page - 1) * opts.PageSize
@@ -50,24 +50,10 @@ func (r *Postgres{{ .EntityName }}Repository) List(ctx context.Context, tenantID
 	if err := r.db.SelectContext(ctx, &items,
 		`SELECT * FROM {{ .TableName }} WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
 		tenantID, opts.PageSize, offset); err != nil {
-		return nil, err
+		return kernel.Paginated[{{ .PackageName }}.{{ .EntityName }}]{}, err
 	}
 
-	totalPages := total / opts.PageSize
-	if total%opts.PageSize != 0 {
-		totalPages++
-	}
-
-	return &kernel.Paginated[{{ .PackageName }}.{{ .EntityName }}]{
-		Items: items,
-		Page: kernel.Page{
-			Current:    opts.Page,
-			PageSize:   opts.PageSize,
-			Total:      total,
-			TotalPages: totalPages,
-		},
-		Empty: len(items) == 0,
-	}, nil
+	return kernel.NewPaginated(items, opts.Page, opts.PageSize, total), nil
 }
 
 func (r *Postgres{{ .EntityName }}Repository) Delete(ctx context.Context, id kernel.{{ .EntityName }}ID) error {
