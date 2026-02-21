@@ -1,10 +1,7 @@
 package {{.PackageName}}api
 
 import (
-	"{{.GoModule}}/{{.DomainPath}}"
 	"{{.GoModule}}/{{.DomainPath}}/{{.PackageName}}srv"
-	"{{.GoModule}}/pkg/errx"
-	"{{.GoModule}}/pkg/kernel"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -18,71 +15,5 @@ func New{{.EntityName}}Handlers(service *{{.PackageName}}srv.{{.EntityName}}Serv
 
 // RegisterRoutes registers all {{.EntityName}} routes on the given router.
 func (h *{{.EntityName}}Handlers) RegisterRoutes(router fiber.Router) {
-	group := router.Group("/{{.TableName}}")
-
-	group.Post("/", h.Create)
-	group.Get("/", h.List)
-	group.Get("/:id", h.GetByID)
-	group.Put("/:id", h.Update)
-	group.Delete("/:id", h.Delete)
-}
-
-func (h *{{.EntityName}}Handlers) Create(c *fiber.Ctx) error {
-	var req {{.PackageName}}.Create{{.EntityName}}Request
-	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
-	}
-
-	result, err := h.service.Create(c.Context(), req)
-	if err != nil {
-		return err
-	}
-
-	return c.Status(fiber.StatusCreated).JSON(result)
-}
-
-func (h *{{.EntityName}}Handlers) GetByID(c *fiber.Ctx) error {
-	id := c.Params("id")
-
-	result, err := h.service.GetByID(c.Context(), kernel.{{.EntityName}}ID(id))
-	if err != nil {
-		return err
-	}
-
-	return c.JSON(result)
-}
-
-func (h *{{.EntityName}}Handlers) List(c *fiber.Ctx) error {
-	results, err := h.service.List(c.Context())
-	if err != nil {
-		return err
-	}
-
-	return c.JSON(results)
-}
-
-func (h *{{.EntityName}}Handlers) Update(c *fiber.Ctx) error {
-	id := c.Params("id")
-
-	var req {{.PackageName}}.Update{{.EntityName}}Request
-	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
-	}
-
-	result, err := h.service.Update(c.Context(), kernel.{{.EntityName}}ID(id), req)
-	if err != nil {
-		return err
-	}
-
-	return c.JSON(result)
-}
-
-func (h *{{.EntityName}}Handlers) Delete(c *fiber.Ctx) error {
-	id := c.Params("id")
-
-	if err := h.service.Delete(c.Context(), kernel.{{.EntityName}}ID(id)); err != nil {
-		return err
-	}
-
-	return c.SendStatus(fiber.StatusNoContent)
+	//group := router.Group("/{{.TableName}}")
 }
