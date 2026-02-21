@@ -7,6 +7,7 @@ import (
 	"{{ .GoModule }}/{{ .DomainPath }}"
 	"{{ .GoModule }}/pkg/errx"
 	"{{ .GoModule }}/pkg/kernel"
+	"github.com/google/uuid"
 )
 
 type {{ .EntityName }}Service struct {
@@ -29,14 +30,14 @@ func (s *{{ .EntityName }}Service) GetByID(ctx context.Context, id kernel.{{ .En
 	return entity, nil
 }
 
-func (s *{{ .EntityName }}Service) List(ctx context.Context, tenantID kernel.TenantID, opts kernel.PaginationOptions) (*kernel.Paginated[{{ .PackageName }}.{{ .EntityName }}], error) {
+func (s *{{ .EntityName }}Service) List(ctx context.Context, tenantID kernel.TenantID, opts kernel.PaginationOptions) (kernel.Paginated[{{ .PackageName }}.{{ .EntityName }}], error) {
 	return s.repo.List(ctx, tenantID, opts)
 }
 
 func (s *{{ .EntityName }}Service) Create(ctx context.Context, req {{ .PackageName }}.Create{{ .EntityName }}Request) (*{{ .PackageName }}.{{ .EntityName }}, error) {
 	now := time.Now()
 	entity := &{{ .PackageName }}.{{ .EntityName }}{
-		ID:        kernel.New{{ .EntityName }}ID(kernel.NewID()),
+		ID:        kernel.New{{ .EntityName }}ID(uuid.NewString()),
 		TenantID:  req.TenantID,
 		CreatedAt: now,
 		UpdatedAt: now,
