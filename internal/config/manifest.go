@@ -11,7 +11,6 @@ import (
 
 const ManifestoFile = "manifesto.yaml"
 
-// Manifest tracks the state of a manifesto-managed project.
 type Manifest struct {
 	Project   ProjectConfig           `yaml:"project"`
 	Modules   map[string]ModuleConfig `yaml:"modules"`
@@ -30,76 +29,55 @@ type ModuleConfig struct {
 	InstalledAt time.Time `yaml:"installed_at"`
 }
 
-// Module defines an installable manifesto module.
 type Module struct {
 	Name        string
 	Description string
-	Paths       []string
+	Paths       []string // Remote paths fetched from GitHub
 	Deps        []string
 	Core        bool
 }
 
-// ModuleRegistry is the canonical list of all installable modules.
 var ModuleRegistry = map[string]Module{
 	"kernel": {
-		Name:        "kernel",
-		Description: "Domain primitives, value objects, pagination, UoW",
-		Paths:       []string{"pkg/kernel"},
-		Core:        true,
+		Name: "kernel", Description: "Domain primitives, value objects, pagination, UoW",
+		Paths: []string{"pkg/kernel"}, Core: true,
 	},
 	"errx": {
-		Name:        "errx",
-		Description: "Structured error handling with HTTP mapping",
-		Paths:       []string{"pkg/errx"},
-		Core:        true,
+		Name: "errx", Description: "Structured error handling with HTTP mapping",
+		Paths: []string{"pkg/errx"}, Core: true,
 	},
 	"logx": {
-		Name:        "logx",
-		Description: "Structured logging (console/JSON)",
-		Paths:       []string{"pkg/logx"},
-		Core:        true,
+		Name: "logx", Description: "Structured logging (console/JSON)",
+		Paths: []string{"pkg/logx"}, Core: true,
 	},
 	"ptrx": {
-		Name:        "ptrx",
-		Description: "Pointer utility helpers",
-		Paths:       []string{"pkg/ptrx"},
-		Core:        true,
+		Name: "ptrx", Description: "Pointer utility helpers",
+		Paths: []string{"pkg/ptrx"}, Core: true,
 	},
 	"config": {
-		Name:        "config",
-		Description: "Environment-driven configuration",
-		Paths:       []string{"pkg/config"},
-		Core:        true,
-	},
-	"iam": {
-		Name:        "iam",
-		Description: "Auth, users, tenants, scopes, API keys",
-		Paths:       []string{"pkg/iam"},
-		Deps:        []string{"kernel", "errx", "config"},
-	},
-	"fsx": {
-		Name:        "fsx",
-		Description: "File system abstraction (local, S3)",
-		Paths:       []string{"pkg/fsx"},
-		Deps:        []string{"errx"},
-	},
-	"ai": {
-		Name:        "ai",
-		Description: "LLM, embeddings, vector store, OCR, speech",
-		Paths:       []string{"pkg/ai"},
-		Deps:        []string{"errx"},
+		Name: "config", Description: "Environment-driven configuration",
+		Paths: []string{"pkg/config"}, Core: true,
 	},
 	"server": {
-		Name:        "server",
-		Description: "HTTP server, container, docker-compose",
-		Paths:       []string{"cmd/container.go", "cmd/server.go", "docker-compose.yml", "Makefile"},
-		Core:        true,
+		Name: "server", Description: "Server, container, Makefile, docker-compose (templated)",
+		Paths: []string{}, // All generated from templates now
+		Core:  true,
 	},
 	"migrations": {
-		Name:        "migrations",
-		Description: "Database migration scaffolding",
-		Paths:       []string{"migrations"},
-		Core:        true,
+		Name: "migrations", Description: "Database migration scaffolding",
+		Paths: []string{"migrations"}, Core: true,
+	},
+	"iam": {
+		Name: "iam", Description: "Auth, users, tenants, scopes, API keys",
+		Paths: []string{"pkg/iam"}, Deps: []string{"kernel", "errx", "config"},
+	},
+	"fsx": {
+		Name: "fsx", Description: "File system abstraction (local, S3)",
+		Paths: []string{"pkg/fsx"}, Deps: []string{"errx"},
+	},
+	"ai": {
+		Name: "ai", Description: "LLM, embeddings, vector store, OCR, speech",
+		Paths: []string{"pkg/ai"}, Deps: []string{"errx"},
 	},
 }
 
@@ -123,7 +101,6 @@ func OptionalModules() []string {
 	return optional
 }
 
-// ResolveDeps returns the full set of modules needed including transitive deps.
 func ResolveDeps(names []string) []string {
 	seen := make(map[string]bool)
 	var result []string
@@ -146,6 +123,15 @@ func ResolveDeps(names []string) []string {
 		resolve(n)
 	}
 	return result
+}
+
+func HasModule(modules []string, name string) bool {
+	for _, m := range modules {
+		if m == name {
+			return true
+		}
+	}
+	return false
 }
 
 func LoadManifest(projectRoot string) (*Manifest, error) {
