@@ -1,0 +1,57 @@
+package {{ .PackageName }}srv
+
+import (
+	"context"
+	"time"
+
+	"{{ .GoModule }}/{{ .DomainPath }}"
+	"{{ .GoModule }}/pkg/errx"
+	"{{ .GoModule }}/pkg/kernel"
+)
+
+type {{ .EntityName }}Service struct {
+	repo {{ .PackageName }}.Repository
+}
+
+func New{{ .EntityName }}Service(
+	repo {{ .PackageName }}.Repository,
+) *{{ .EntityName }}Service {
+	return &{{ .EntityName }}Service{
+		repo: repo,
+	}
+}
+
+func (s *{{ .EntityName }}Service) GetByID(ctx context.Context, id kernel.{{ .EntityName }}ID) (*{{ .PackageName }}.{{ .EntityName }}, error) {
+	entity, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, {{ .PackageName }}.Err{{ .EntityName }}NotFound()
+	}
+	return entity, nil
+}
+
+func (s *{{ .EntityName }}Service) List(ctx context.Context, tenantID kernel.TenantID, opts kernel.PaginationOptions) (*kernel.Paginated[{{ .PackageName }}.{{ .EntityName }}], error) {
+	return s.repo.List(ctx, tenantID, opts)
+}
+
+func (s *{{ .EntityName }}Service) Create(ctx context.Context, req {{ .PackageName }}.Create{{ .EntityName }}Request) (*{{ .PackageName }}.{{ .EntityName }}, error) {
+	now := time.Now()
+	entity := &{{ .PackageName }}.{{ .EntityName }}{
+		ID:        kernel.New{{ .EntityName }}ID(kernel.NewID()),
+		TenantID:  req.TenantID,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	if err := s.repo.Create(ctx, entity); err != nil {
+		return nil, errx.Wrap(err, "failed to create {{ .PackageName }}", errx.TypeInternal)
+	}
+
+	return entity, nil
+}
+
+func (s *{{ .EntityName }}Service) Delete(ctx context.Context, id kernel.{{ .EntityName }}ID) error {
+	if _, err := s.repo.GetByID(ctx, id); err != nil {
+		return {{ .PackageName }}.Err{{ .EntityName }}NotFound()
+	}
+	return s.repo.Delete(ctx, id)
+}

@@ -1,0 +1,33 @@
+package {{ .PackageName }}
+
+import (
+	"net/http"
+
+	"{{ .GoModule }}/pkg/errx"
+)
+
+var ErrRegistry = errx.NewRegistry("{{ .RegistryCode }}")
+
+var (
+	Code{{ .EntityName }}NotFound = ErrRegistry.Register(
+		"{{ .RegistryCode }}_NOT_FOUND",
+		errx.TypeNotFound,
+		http.StatusNotFound,
+		"{{ .EntityName }} not found",
+	)
+
+	Code{{ .EntityName }}AlreadyExists = ErrRegistry.Register(
+		"{{ .RegistryCode }}_ALREADY_EXISTS",
+		errx.TypeBusiness,
+		http.StatusConflict,
+		"{{ .EntityName }} already exists",
+	)
+)
+
+func Err{{ .EntityName }}NotFound() error {
+	return ErrRegistry.New(Code{{ .EntityName }}NotFound)
+}
+
+func Err{{ .EntityName }}AlreadyExists() error {
+	return ErrRegistry.New(Code{{ .EntityName }}AlreadyExists)
+}

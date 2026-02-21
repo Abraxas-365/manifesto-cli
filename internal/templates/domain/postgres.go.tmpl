@@ -1,0 +1,76 @@
+package {{ .PackageName }}infra
+
+import (
+	"context"
+
+	"{{ .GoModule }}/{{ .DomainPath }}"
+	"{{ .GoModule }}/pkg/kernel"
+	"github.com/jmoiron/sqlx"
+)
+
+type Postgres{{ .EntityName }}Repository struct {
+	db *sqlx.DB
+}
+
+func NewPostgres{{ .EntityName }}Repository(db *sqlx.DB) {{ .PackageName }}.Repository {
+	return &Postgres{{ .EntityName }}Repository{db: db}
+}
+
+func (r *Postgres{{ .EntityName }}Repository) Create(ctx context.Context, entity *{{ .PackageName }}.{{ .EntityName }}) error {
+	query := `INSERT INTO {{ .TableName }} (id, tenant_id, created_at, updated_at)
+	          VALUES ($1, $2, $3, $4)`
+	_, err := r.db.ExecContext(ctx, query, entity.ID, entity.TenantID, entity.CreatedAt, entity.UpdatedAt)
+	return err
+}
+
+func (r *Postgres{{ .EntityName }}Repository) Update(ctx context.Context, entity *{{ .PackageName }}.{{ .EntityName }}) error {
+	query := `UPDATE {{ .TableName }} SET updated_at = $1 WHERE id = $2`
+	_, err := r.db.ExecContext(ctx, query, entity.UpdatedAt, entity.ID)
+	return err
+}
+
+func (r *Postgres{{ .EntityName }}Repository) GetByID(ctx context.Context, id kernel.{{ .EntityName }}ID) (*{{ .PackageName }}.{{ .EntityName }}, error) {
+	var entity {{ .PackageName }}.{{ .EntityName }}
+	query := `SELECT * FROM {{ .TableName }} WHERE id = $1`
+	err := r.db.QueryRowxContext(ctx, query, id).StructScan(&entity)
+	if err != nil {
+		return nil, err
+	}
+	return &entity, nil
+}
+
+func (r *Postgres{{ .EntityName }}Repository) List(ctx context.Context, tenantID kernel.TenantID, opts kernel.PaginationOptions) (*kernel.Paginated[{{ .PackageName }}.{{ .EntityName }}], error) {
+	var total int
+	if err := r.db.QueryRowxContext(ctx, `SELECT COUNT(*) FROM {{ .TableName }} WHERE tenant_id = $1`, tenantID).Scan(&total); err != nil {
+		return nil, err
+	}
+
+	offset := (opts.Page - 1) * opts.PageSize
+	var items []{{ .PackageName }}.{{ .EntityName }}
+	if err := r.db.SelectContext(ctx, &items,
+		`SELECT * FROM {{ .TableName }} WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
+		tenantID, opts.PageSize, offset); err != nil {
+		return nil, err
+	}
+
+	totalPages := total / opts.PageSize
+	if total%opts.PageSize != 0 {
+		totalPages++
+	}
+
+	return &kernel.Paginated[{{ .PackageName }}.{{ .EntityName }}]{
+		Items: items,
+		Page: kernel.Page{
+			Current:    opts.Page,
+			PageSize:   opts.PageSize,
+			Total:      total,
+			TotalPages: totalPages,
+		},
+		Empty: len(items) == 0,
+	}, nil
+}
+
+func (r *Postgres{{ .EntityName }}Repository) Delete(ctx context.Context, id kernel.{{ .EntityName }}ID) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM {{ .TableName }} WHERE id = $1`, id)
+	return err
+}

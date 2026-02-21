@@ -1,0 +1,58 @@
+package {{ .PackageName }}api
+
+import (
+	"{{ .GoModule }}/{{ .DomainPath }}"
+	"{{ .GoModule }}/{{ .DomainPath }}/{{ .PackageName }}srv"
+	"{{ .GoModule }}/pkg/kernel"
+	"github.com/gofiber/fiber/v2"
+)
+
+type {{ .EntityName }}Handlers struct {
+	svc *{{ .PackageName }}srv.{{ .EntityName }}Service
+}
+
+func New{{ .EntityName }}Handlers(svc *{{ .PackageName }}srv.{{ .EntityName }}Service) *{{ .EntityName }}Handlers {
+	return &{{ .EntityName }}Handlers{svc: svc}
+}
+
+func (h *{{ .EntityName }}Handlers) GetByID(c *fiber.Ctx) error {
+	id := kernel.{{ .EntityName }}ID(c.Params("id"))
+	entity, err := h.svc.GetByID(c.Context(), id)
+	if err != nil {
+		return err
+	}
+	return c.JSON(entity.ToResponse())
+}
+
+func (h *{{ .EntityName }}Handlers) List(c *fiber.Ctx) error {
+	tenantID := kernel.TenantID(c.Query("tenant_id"))
+	opts := kernel.PaginationOptions{
+		Page:     c.QueryInt("page", 1),
+		PageSize: c.QueryInt("page_size", 20),
+	}
+	result, err := h.svc.List(c.Context(), tenantID, opts)
+	if err != nil {
+		return err
+	}
+	return c.JSON(result)
+}
+
+func (h *{{ .EntityName }}Handlers) Create(c *fiber.Ctx) error {
+	var req {{ .PackageName }}.Create{{ .EntityName }}Request
+	if err := c.BodyParser(&req); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+	}
+	entity, err := h.svc.Create(c.Context(), req)
+	if err != nil {
+		return err
+	}
+	return c.Status(fiber.StatusCreated).JSON(entity.ToResponse())
+}
+
+func (h *{{ .EntityName }}Handlers) Delete(c *fiber.Ctx) error {
+	id := kernel.{{ .EntityName }}ID(c.Params("id"))
+	if err := h.svc.Delete(c.Context(), id); err != nil {
+		return err
+	}
+	return c.SendStatus(fiber.StatusNoContent)
+}

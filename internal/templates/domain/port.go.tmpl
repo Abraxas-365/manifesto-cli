@@ -1,0 +1,16 @@
+package {{ .PackageName }}
+
+import (
+	"context"
+
+	"{{ .GoModule }}/pkg/kernel"
+)
+
+// Repository defines the data access contract for {{ .EntityName }}.
+type Repository interface {
+	Create(ctx context.Context, entity *{{ .EntityName }}) error
+	Update(ctx context.Context, entity *{{ .EntityName }}) error
+	GetByID(ctx context.Context, id kernel.{{ .EntityName }}ID) (*{{ .EntityName }}, error)
+	List(ctx context.Context, tenantID kernel.TenantID, opts kernel.PaginationOptions) (*kernel.Paginated[{{ .EntityName }}], error)
+	Delete(ctx context.Context, id kernel.{{ .EntityName }}ID) error
+}
