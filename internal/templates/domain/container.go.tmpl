@@ -1,0 +1,49 @@
+package {{.PackageName}}container
+
+import (
+	"{{.GoModule}}/{{.DomainPath}}/{{.PackageName}}api"
+	"{{.GoModule}}/{{.DomainPath}}/{{.PackageName}}infra"
+	"{{.GoModule}}/{{.DomainPath}}/{{.PackageName}}srv"
+	"{{.GoModule}}/pkg/logx"
+	"github.com/gofiber/fiber/v2"
+	"github.com/jmoiron/sqlx"
+)
+
+// Deps holds the external dependencies this module requires.
+type Deps struct {
+	DB *sqlx.DB
+	// Add cross-module interfaces here as needed, e.g.:
+	// Notifier somepkg.Notifier
+}
+
+// Container exposes only what other modules or cmd/ actually need.
+type Container struct {
+	{{.EntityName}}Service  *{{.PackageName}}srv.{{.EntityName}}Service
+	{{.EntityName}}Handlers *{{.PackageName}}api.{{.EntityName}}Handlers
+}
+
+// New constructs the entire {{.EntityName}} dependency graph.
+func New(deps Deps) *Container {
+	logx.Info("🔧 Initializing {{.EntityName}} container...")
+
+	// Repositories
+	repo := {{.PackageName}}infra.NewPostgres{{.EntityName}}Repository(deps.DB)
+
+	// Services
+	svc := {{.PackageName}}srv.New{{.EntityName}}Service(repo)
+
+	// Handlers
+	handlers := {{.PackageName}}api.New{{.EntityName}}Handlers(svc)
+
+	logx.Info("✅ {{.EntityName}} container initialized")
+
+	return &Container{
+		{{.EntityName}}Service:  svc,
+		{{.EntityName}}Handlers: handlers,
+	}
+}
+
+// RegisterRoutes registers all {{.EntityName}} HTTP routes on the given router.
+func (c *Container) RegisterRoutes(router fiber.Router) {
+	c.{{.EntityName}}Handlers.RegisterRoutes(router)
+}

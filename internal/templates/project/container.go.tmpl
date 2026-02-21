@@ -5,97 +5,60 @@ import (
 	"fmt"
 	"os"
 
-	"{{ .GoModule }}/pkg/config"
-	"{{ .GoModule }}/pkg/logx"
-{{- if .HasFSX }}
-	"{{ .GoModule }}/pkg/fsx"
-	"{{ .GoModule }}/pkg/fsx/fsxlocal"
-	"{{ .GoModule }}/pkg/fsx/fsxs3"
-{{- end }}
-{{- if .HasIAM }}
-	"{{ .GoModule }}/pkg/iam"
-	"{{ .GoModule }}/pkg/iam/apikey"
-	"{{ .GoModule }}/pkg/iam/apikey/apikeyapi"
-	"{{ .GoModule }}/pkg/iam/apikey/apikeyinfra"
-	"{{ .GoModule }}/pkg/iam/apikey/apikeysrv"
-	"{{ .GoModule }}/pkg/iam/auth"
-	"{{ .GoModule }}/pkg/iam/auth/authinfra"
-	"{{ .GoModule }}/pkg/iam/invitation/invitationapi"
-	"{{ .GoModule }}/pkg/iam/invitation/invitationinfra"
-	"{{ .GoModule }}/pkg/iam/invitation/invitationsrv"
-	"{{ .GoModule }}/pkg/iam/otp/otpinfra"
-	"{{ .GoModule }}/pkg/iam/otp/otpsrv"
-	"{{ .GoModule }}/pkg/iam/tenant/tenantinfra"
-	"{{ .GoModule }}/pkg/iam/tenant/tenantsrv"
-	"{{ .GoModule }}/pkg/iam/user/userinfra"
-	"{{ .GoModule }}/pkg/iam/user/usersrv"
-{{- end }}
-{{- if .HasFSX }}
+	"{{.GoModule}}/pkg/config"
+{{- if .HasFSX}}
+	"{{.GoModule}}/pkg/fsx"
+	"{{.GoModule}}/pkg/fsx/fsxlocal"
+	"{{.GoModule}}/pkg/fsx/fsxs3"
+{{- end}}
+{{- if .HasIAM}}
+	"{{.GoModule}}/pkg/iam/iamcontainer"
+{{- end}}
+	"{{.GoModule}}/pkg/logx"
+{{- if .HasFSX}}
 	awsConfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-{{- end }}
+{{- end}}
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
-{{- if .HasIAM }}
 	"github.com/redis/go-redis/v9"
-{{- end }}
+	// manifesto:container-imports
 )
 
-// Container holds all application dependencies
+// Container holds shared infrastructure and composed module containers.
 type Container struct {
-	// Config
 	Config *config.Config
 
 	// Infrastructure
-	DB *sqlx.DB
-{{- if .HasIAM }}
+	DB    *sqlx.DB
 	Redis *redis.Client
-{{- end }}
-{{- if .HasFSX }}
+{{- if .HasFSX}}
 	FileSystem fsx.FileSystem
 	S3Client   *s3.Client
-{{- end }}
-{{- if .HasIAM }}
+{{- end}}
 
-	// Core IAM Services
-	OAuthHandlers        *auth.AuthHandlers
-	PasswordlessHandlers *auth.PasswordlessAuthHandlers
-	TokenService         auth.TokenService
-	APIKeyService        *apikeysrv.APIKeyService
-	TenantService        *tenantsrv.TenantService
-	UserService          *usersrv.UserService
-	InvitationService    *invitationsrv.InvitationService
-	OTPService           *otpsrv.OTPService
-
-	// API Handlers
-	APIKeyHandlers     *apikeyapi.APIKeyHandlers
-	InvitationHandlers *invitationapi.InvitationHandlers
-
-	// Middleware
-	UnifiedAuthMiddleware *auth.UnifiedAuthMiddleware
-	AuthMiddleware        *auth.TokenMiddleware
-
-	// Background Services
-	CleanupService *authinfra.CleanupService
-{{- end }}
+	// Bounded-context containers
+{{- if .HasIAM}}
+	IAM *iamcontainer.Container
+{{- end}}
+	// manifesto:container-fields
 }
 
-// NewContainer initializes the dependency injection container
 func NewContainer(cfg *config.Config) *Container {
-	logx.Info("🔧 Initializing dependency container...")
+	logx.Info("🔧 Initializing application container...")
 
-	c := &Container{
-		Config: cfg,
-	}
+	c := &Container{Config: cfg}
 
 	c.initInfrastructure()
-{{- if .HasIAM }}
-	c.initRepositories()
-{{- end }}
+	c.initModules()
 
-	logx.Info("✅ Container initialized successfully")
+	logx.Info("✅ Application container initialized")
 	return c
 }
+
+// ---------------------------------------------------------------------------
+// Infrastructure
+// ---------------------------------------------------------------------------
 
 func (c *Container) initInfrastructure() {
 	logx.Info("🏗️ Initializing infrastructure...")
@@ -118,9 +81,7 @@ func (c *Container) initInfrastructure() {
 	db.SetMaxIdleConns(c.Config.Database.MaxIdleConns)
 	db.SetConnMaxLifetime(c.Config.Database.ConnMaxLifetime)
 	c.DB = db
-	logx.Info("✅ Database connected")
-
-{{- if .HasIAM }}
+	logx.Info("  ✅ Database connected")
 
 	// Redis
 	c.Redis = redis.NewClient(&redis.Options{
@@ -130,29 +91,27 @@ func (c *Container) initInfrastructure() {
 	})
 	if _, err := c.Redis.Ping(context.Background()).Result(); err != nil {
 		logx.Fatalf("Failed to connect to Redis: %v (Redis is required)", err)
-	} else {
-		logx.Info("✅ Redis connected")
 	}
-{{- end }}
+	logx.Info("  ✅ Redis connected")
 
-{{- if .HasFSX }}
+{{- if .HasFSX}}
 
-	// File Storage
+	// File storage
 	c.initFileStorage()
-{{- end }}
+{{- end}}
 
 	logx.Info("✅ Infrastructure initialized")
 }
 
-{{- if .HasFSX }}
+{{- if .HasFSX}}
 
 func (c *Container) initFileStorage() {
 	storageMode := getEnv("STORAGE_MODE", "local")
 
 	switch storageMode {
 	case "s3":
-		awsRegion := getEnv("AWS_REGION", "us-east-1")
-		awsBucket := getEnv("AWS_BUCKET", "{{ .ProjectName }}-uploads")
+		awsRegion := getEnv("AWS_REGION", c.Config.Email.AWSRegion)
+		awsBucket := getEnv("AWS_BUCKET", "{{.ProjectName}}-uploads")
 
 		cfg, err := awsConfig.LoadDefaultConfig(context.TODO(), awsConfig.WithRegion(awsRegion))
 		if err != nil {
@@ -160,7 +119,7 @@ func (c *Container) initFileStorage() {
 		}
 		c.S3Client = s3.NewFromConfig(cfg)
 		c.FileSystem = fsxs3.NewS3FileSystem(c.S3Client, awsBucket, "")
-		logx.Infof("✅ S3 file system configured (bucket: %s, region: %s)", awsBucket, awsRegion)
+		logx.Infof("  ✅ S3 file system configured (bucket: %s, region: %s)", awsBucket, awsRegion)
 
 	case "local":
 		uploadDir := getEnv("UPLOAD_DIR", "./uploads")
@@ -169,163 +128,45 @@ func (c *Container) initFileStorage() {
 			logx.Fatalf("Failed to initialize local file system: %v", err)
 		}
 		c.FileSystem = localFS
-		logx.Infof("✅ Local file system configured (path: %s)", localFS.GetBasePath())
+		logx.Infof("  ✅ Local file system configured (path: %s)", localFS.GetBasePath())
 
 	default:
 		logx.Fatalf("Unknown STORAGE_MODE: %s (use 'local' or 's3')", storageMode)
 	}
 }
-{{- end }}
+{{- end}}
 
-{{- if .HasIAM }}
+// ---------------------------------------------------------------------------
+// Module composition
+// ---------------------------------------------------------------------------
 
-func (c *Container) initRepositories() {
-	logx.Info("🗄️  Initializing repositories and services...")
+func (c *Container) initModules() {
+	logx.Info("📦 Initializing modules...")
 
-	// --- IAM Repositories ---
-	tenantRepo := tenantinfra.NewPostgresTenantRepository(c.DB)
-	tenantConfigRepo := tenantinfra.NewPostgresTenantConfigRepository(c.DB)
-	userRepo := userinfra.NewPostgresUserRepository(c.DB)
-	tokenRepo := authinfra.NewPostgresTokenRepository(c.DB)
-	sessionRepo := authinfra.NewPostgresSessionRepository(c.DB)
-	passwordResetRepo := authinfra.NewPostgresPasswordResetRepository(c.DB)
-	invitationRepo := invitationinfra.NewPostgresInvitationRepository(c.DB)
-	apiKeyRepo := apikeyinfra.NewPostgresAPIKeyRepository(c.DB)
-	otpRepo := otpinfra.NewPostgresOTPRepository(c.DB)
+{{- if .HasIAM}}
+	c.IAM = iamcontainer.New(iamcontainer.Deps{
+		DB:          c.DB,
+		Redis:       c.Redis,
+		Cfg:         c.Config,
+		OTPNotifier: NewConsoleNotifier(),
+	})
+{{- end}}
 
-	// --- Infrastructure Services ---
-
-	// State Manager
-	var stateManager auth.StateManager
-	if c.Config.OAuth.StateManager.Type == "redis" {
-		stateManager = authinfra.NewRedisStateManager(c.Redis, c.Config.OAuth.StateManager.TTL)
-		logx.Info("✅ Using Redis state manager for OAuth")
-	} else {
-		stateManager = auth.NewInMemoryStateManager(c.Config.OAuth.StateManager.TTL)
-		logx.Warn("⚠️  Using in-memory state manager (not recommended for production)")
-	}
-
-	// Password Service
-	passwordSvc := authinfra.NewBcryptPasswordService(c.Config.Auth.Password.BcryptCost)
-
-	// Token Service
-	c.TokenService = auth.NewJWTServiceFromConfig(&c.Config.Auth.JWT)
-
-	// API Key Configuration
-	apikey.InitAPIKeyConfig(
-		c.Config.Auth.APIKey.LivePrefix,
-		c.Config.Auth.APIKey.TestPrefix,
-		c.Config.Auth.APIKey.TokenLength,
-	)
-
-	// --- IAM Domain Services ---
-	c.TenantService = tenantsrv.NewTenantService(
-		tenantRepo,
-		tenantConfigRepo,
-		userRepo,
-		&c.Config.TenantConfig,
-	)
-
-	c.UserService = usersrv.NewUserService(
-		userRepo,
-		tenantRepo,
-		passwordSvc,
-	)
-
-	c.InvitationService = invitationsrv.NewInvitationService(
-		invitationRepo,
-		userRepo,
-		tenantRepo,
-		&c.Config.Auth.Invitation,
-	)
-
-	c.APIKeyService = apikeysrv.NewAPIKeyService(
-		apiKeyRepo,
-		tenantRepo,
-		userRepo,
-	)
-
-	// OTP Service with Console Notifier (development)
-	// TODO: Replace with real email/SMS service in production
-	c.OTPService = otpsrv.NewOTPService(
-		otpRepo,
-		NewConsoleNotifier(),
-		&c.Config.Auth.OTP,
-	)
-
-	// --- OAuth Services ---
-	oauthServices := make(map[iam.OAuthProvider]auth.OAuthService)
-
-	if c.Config.OAuth.Google.Enabled {
-		oauthServices[iam.OAuthProviderGoogle] = auth.NewGoogleOAuthServiceFromConfig(
-			&c.Config.OAuth.Google,
-			stateManager,
-		)
-		logx.Info("✅ Google OAuth enabled")
-	}
-
-	if c.Config.OAuth.Microsoft.Enabled {
-		oauthServices[iam.OAuthProviderMicrosoft] = auth.NewMicrosoftOAuthServiceFromConfig(
-			&c.Config.OAuth.Microsoft,
-			stateManager,
-		)
-		logx.Info("✅ Microsoft OAuth enabled")
-	}
-
-	// --- Authentication Handlers ---
-	c.OAuthHandlers = auth.NewAuthHandlers(
-		oauthServices,
-		c.TokenService,
-		userRepo,
-		tenantRepo,
-		tokenRepo,
-		sessionRepo,
-		stateManager,
-		invitationRepo,
-		c.Config,
-	)
-	logx.Info("✅ OAuth handlers initialized")
-
-	c.PasswordlessHandlers = auth.NewPasswordlessAuthHandlers(
-		c.TokenService,
-		userRepo,
-		tenantRepo,
-		tokenRepo,
-		sessionRepo,
-		invitationRepo,
-		c.OTPService,
-		c.Config,
-	)
-	logx.Info("✅ Passwordless handlers initialized")
-
-	// --- API Handlers ---
-	c.APIKeyHandlers = apikeyapi.NewAPIKeyHandlers(c.APIKeyService)
-	c.InvitationHandlers = invitationapi.NewInvitationHandlers(c.InvitationService)
-
-	// --- Middleware ---
-	c.AuthMiddleware = auth.NewAuthMiddleware(c.TokenService)
-	c.UnifiedAuthMiddleware = auth.NewAPIKeyMiddleware(c.APIKeyService, c.TokenService)
-
-	// --- Background Services ---
-	c.CleanupService = authinfra.NewCleanupService(
-		tokenRepo,
-		sessionRepo,
-		passwordResetRepo,
-		c.Config.Auth.Session.CleanupInterval,
-	)
-
-	logx.Info("✅ All services and handlers initialized")
+	// manifesto:module-init
 }
 
-// StartBackgroundServices starts background workers
+// ---------------------------------------------------------------------------
+// Lifecycle
+// ---------------------------------------------------------------------------
+
 func (c *Container) StartBackgroundServices(ctx context.Context) {
 	logx.Info("🔄 Starting background services...")
-	go c.CleanupService.Start(ctx)
-	logx.Info("✅ Cleanup service started")
+{{- if .HasIAM}}
+	c.IAM.StartBackgroundServices(ctx)
+{{- end}}
+	// manifesto:background-start
 }
-{{- end }}
 
-// Cleanup closes all connections and stops workers
 func (c *Container) Cleanup() {
 	logx.Info("🧹 Cleaning up resources...")
 
@@ -333,63 +174,24 @@ func (c *Container) Cleanup() {
 		if err := c.DB.Close(); err != nil {
 			logx.Errorf("Error closing database: %v", err)
 		} else {
-			logx.Info("✅ Database connection closed")
+			logx.Info("  ✅ Database connection closed")
 		}
 	}
-
-{{- if .HasIAM }}
 
 	if c.Redis != nil {
 		if err := c.Redis.Close(); err != nil {
 			logx.Errorf("Error closing Redis: %v", err)
 		} else {
-			logx.Info("✅ Redis connection closed")
+			logx.Info("  ✅ Redis connection closed")
 		}
 	}
-{{- end }}
 
-	logx.Info("✅ Cleanup completed")
+	logx.Info("✅ Cleanup complete")
 }
 
-// ============================================================================
-// Helpers
-// ============================================================================
-
-func getEnv(key, defaultValue string) string {
+func getEnv(key, fallback string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
 	}
-	return defaultValue
+	return fallback
 }
-
-{{- if .HasIAM }}
-
-// ConsoleNotifier implements OTP notification via console (dev only)
-type ConsoleNotifier struct{}
-
-func NewConsoleNotifier() *ConsoleNotifier { return &ConsoleNotifier{} }
-
-func (n *ConsoleNotifier) SendOTP(ctx context.Context, contact string, code string) error {
-	fmt.Println()
-	fmt.Println(repeatStr("=", 60))
-	fmt.Println("📧 OTP NOTIFICATION (Console Output)")
-	fmt.Println(repeatStr("=", 60))
-	fmt.Printf("📨 To: %s\n", contact)
-	fmt.Printf("🔐 Code: %s\n", code)
-	fmt.Println(repeatStr("=", 60))
-	fmt.Println("⚠️  This is console output for development only")
-	fmt.Println(repeatStr("=", 60))
-	fmt.Println()
-
-	logx.Infof("📧 OTP sent to %s: %s", contact, code)
-	return nil
-}
-
-func repeatStr(s string, count int) string {
-	result := ""
-	for range count {
-		result += s
-	}
-	return result
-}
-{{- end }}

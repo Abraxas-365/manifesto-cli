@@ -143,41 +143,36 @@ func setupMiddleware(app *fiber.App, cfg *config.Config) {
 func registerRoutes(app *fiber.App, container *Container) {
 	logx.Info("📝 Registering routes...")
 
-{{- if .HasIAM }}
+{{- if .HasIAM}}
+	// ── IAM Routes ───────────────────────────────────────────────────────
+	container.IAM.OAuthHandlers.RegisterRoutes(app)
+	logx.Info("  ✓ OAuth routes registered")
 
-	// --- Authentication Routes (public) ---
-	container.OAuthHandlers.RegisterRoutes(app)
-	logx.Info("✓ OAuth routes registered")
+	container.IAM.PasswordlessHandlers.RegisterRoutes(app)
+	logx.Info("  ✓ Passwordless auth routes registered")
+{{- end}}
 
-	container.PasswordlessHandlers.RegisterRoutes(app)
-	logx.Info("✓ Passwordless auth routes registered")
-{{- end }}
+	// Protected routes
+	protected := app.Group("/api/v1",
+{{- if .HasIAM}}
+		container.IAM.UnifiedAuthMiddleware.Authenticate(),
+{{- end}}
+	)
 
-	// --- API Routes ---
-	api := app.Group("/api/v1")
+{{- if .HasIAM}}
+	container.IAM.APIKeyHandlers.RegisterRoutes(protected, container.IAM.UnifiedAuthMiddleware)
+	logx.Info("  ✓ API key routes registered")
 
-{{- if .HasIAM }}
+	container.IAM.InvitationHandlers.RegisterRoutes(protected, container.IAM.UnifiedAuthMiddleware)
+	logx.Info("  ✓ Invitation routes registered")
+{{- end}}
 
-	// API Keys: /api/v1/api-keys/*
-	container.APIKeyHandlers.RegisterRoutes(api, container.UnifiedAuthMiddleware)
-	logx.Info("✓ API Key routes registered")
-
-	// Invitations: /api/v1/invitations/*
-	container.InvitationHandlers.RegisterRoutes(api, container.UnifiedAuthMiddleware)
-	logx.Info("✓ Invitation routes registered")
-{{- end }}
-
-	// --- Your domain routes go here ---
-	// Example:
-	// items := api.Group("/items")
-	// items.Get("/:id", container.ItemHandlers.GetByID)
-	// items.Get("/", container.ItemHandlers.List)
-	// items.Post("/", container.ItemHandlers.Create)
-	// items.Delete("/:id", container.ItemHandlers.Delete)
-	_ = api // remove once you register routes
+	// ── Module Routes (auto-injected by `manifesto add`) ─────────────────
+	// manifesto:route-registration
 
 	logx.Info("✅ All routes registered")
 }
+
 
 // ============================================================================
 // Handlers
