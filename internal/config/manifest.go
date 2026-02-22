@@ -69,7 +69,7 @@ var ModuleRegistry = map[string]Module{
 	},
 	"iam": {
 		Name: "iam", Description: "Auth, users, tenants, scopes, API keys",
-		Paths: []string{"pkg/iam"}, Deps: []string{"kernel", "errx", "config"},
+        Paths: []string{"pkg/iam"}, Core: true,
 	},
 	"fsx": {
 		Name: "fsx", Description: "File system abstraction (local, S3)",

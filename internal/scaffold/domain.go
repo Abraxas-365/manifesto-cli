@@ -53,7 +53,6 @@ func GenerateDomain(projectRoot string, data DomainData) error {
 		{"domain/service.go.tmpl", filepath.Join(baseDir, data.PackageName+"srv", "service.go")},
 		{"domain/postgres.go.tmpl", filepath.Join(baseDir, data.PackageName+"infra", "postgres.go")},
 		{"domain/handler.go.tmpl", filepath.Join(baseDir, data.PackageName+"api", "handler.go")},
-		// NEW: module container
 		{"domain/container.go.tmpl", filepath.Join(baseDir, data.ContainerPkg, "container.go")},
 	}
 
