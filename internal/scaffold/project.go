@@ -32,6 +32,7 @@ type ProjectData struct {
 	HasIAM      bool
 	HasFSX      bool
 	HasAI       bool
+	HasAsyncX   bool
 }
 
 func InitProject(opts InitOptions) error {
@@ -98,6 +99,7 @@ func InitProject(opts InitOptions) error {
 		HasIAM:      config.HasModule(allModules, "iam"),
 		HasFSX:      config.HasModule(allModules, "fsx"),
 		HasAI:       config.HasModule(allModules, "ai"),
+		HasAsyncX:   config.HasModule(allModules, "asyncx"),
 	}
 
 	templateFiles := []struct {

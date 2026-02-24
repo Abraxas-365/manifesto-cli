@@ -54,14 +54,17 @@ var ModuleRegistry = map[string]Module{
 		Name: "ptrx", Description: "Pointer utility helpers",
 		Paths: []string{"pkg/ptrx"}, Core: true,
 	},
+	"asyncx": {
+		Name: "asyncx", Description: "Async primitives: futures, fan-out, pools, retry, timeout",
+		Paths: []string{"pkg/asyncx"}, Core: true,
+	},
 	"config": {
 		Name: "config", Description: "Environment-driven configuration",
 		Paths: []string{"pkg/config"}, Core: true,
 	},
 	"server": {
 		Name: "server", Description: "Server, container, Makefile, docker-compose (templated)",
-		Paths: []string{}, // All generated from templates now
-		Core:  true,
+		Paths: []string{}, Core: true,
 	},
 	"migrations": {
 		Name: "migrations", Description: "Database migration scaffolding",
@@ -69,7 +72,7 @@ var ModuleRegistry = map[string]Module{
 	},
 	"iam": {
 		Name: "iam", Description: "Auth, users, tenants, scopes, API keys",
-        Paths: []string{"pkg/iam"}, Core: true,
+		Paths: []string{"pkg/iam"}, Core: true,
 	},
 	"fsx": {
 		Name: "fsx", Description: "File system abstraction (local, S3)",
@@ -78,7 +81,8 @@ var ModuleRegistry = map[string]Module{
 	"ai": {
 		Name: "ai", Description: "LLM, embeddings, vector store, OCR, speech",
 		Paths: []string{"pkg/ai"}, Deps: []string{"errx", "fsx"},
-	}}
+	},
+}
 
 func CoreModules() []string {
 	var core []string
