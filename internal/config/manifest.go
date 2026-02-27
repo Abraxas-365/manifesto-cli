@@ -84,7 +84,19 @@ var ModuleRegistry = map[string]Module{
 	},
 }
 
-func CoreModules() []string {
+// QuickProjectRef is the default Git ref for quick projects.
+const QuickProjectRef = "quick-project"
+
+// quickCoreModules are always included in a quick project.
+var quickCoreModules = []string{"kernel", "errx", "logx", "ptrx", "config", "server"}
+
+// quickOptionalModules can be selected when creating a quick project.
+var quickOptionalModules = []string{"fsx", "asyncx", "ai"}
+
+func CoreModules(quick bool) []string {
+	if quick {
+		return append([]string{}, quickCoreModules...)
+	}
 	var core []string
 	for name, mod := range ModuleRegistry {
 		if mod.Core {
@@ -94,7 +106,10 @@ func CoreModules() []string {
 	return core
 }
 
-func OptionalModules() []string {
+func OptionalModules(quick bool) []string {
+	if quick {
+		return append([]string{}, quickOptionalModules...)
+	}
 	var optional []string
 	for name, mod := range ModuleRegistry {
 		if !mod.Core {
@@ -102,6 +117,21 @@ func OptionalModules() []string {
 		}
 	}
 	return optional
+}
+
+// IsQuickModule returns true if the module is available in quick projects.
+func IsQuickModule(name string) bool {
+	for _, m := range quickCoreModules {
+		if m == name {
+			return true
+		}
+	}
+	for _, m := range quickOptionalModules {
+		if m == name {
+			return true
+		}
+	}
+	return false
 }
 
 func ResolveDeps(names []string) []string {

@@ -17,6 +17,7 @@ var (
 	initModules  []string
 	initRef      string
 	initAll      bool
+	initQuick    bool
 )
 
 var initCmd = &cobra.Command{
@@ -32,10 +33,15 @@ Optional modules (select during init or install later):
   fsx   File system abstraction (S3, local)
   ai    AI toolkit (LLM, embeddings, vector store, OCR)
 
+Use --quick for a lightweight project without IAM or migrations:
+  manifesto init myapp --module github.com/me/myapp --quick
+
 Examples:
   manifesto init myapp --module github.com/me/myapp
   manifesto init myapp --module github.com/me/myapp --with iam,ai
-  manifesto init myapp --module github.com/me/myapp --all`,
+  manifesto init myapp --module github.com/me/myapp --all
+  manifesto init myapp --module github.com/me/myapp --quick
+  manifesto init myapp --module github.com/me/myapp --quick --with fsx,asyncx`,
 	Args: cobra.ExactArgs(1),
 	RunE: runInit,
 }
@@ -45,6 +51,7 @@ func init() {
 	initCmd.Flags().StringSliceVar(&initModules, "with", nil, "Optional modules (comma-separated: iam,ai,fsx)")
 	initCmd.Flags().StringVar(&initRef, "ref", "", "Manifesto version (tag or branch, default: latest)")
 	initCmd.Flags().BoolVar(&initAll, "all", false, "Include all optional modules")
+	initCmd.Flags().BoolVar(&initQuick, "quick", false, "Create a lightweight project (no IAM, no migrations)")
 	_ = initCmd.MarkFlagRequired("module")
 }
 
@@ -53,24 +60,31 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	// --- CRA-style banner ---
 	ui.PrintBanner()
-	ui.PrintCreateHeader(projectName, initGoModule)
+	if initQuick {
+		ui.PrintCreateHeaderQuick(projectName, initGoModule)
+	} else {
+		ui.PrintCreateHeader(projectName, initGoModule)
+	}
 
 	// Build module list.
-	selected := config.CoreModules()
+	selected := config.CoreModules(initQuick)
 
 	if initAll {
-		selected = append(selected, config.OptionalModules()...)
+		selected = append(selected, config.OptionalModules(initQuick)...)
 	} else if len(initModules) > 0 {
 		for _, m := range initModules {
 			m = strings.TrimSpace(m)
 			if _, ok := config.ModuleRegistry[m]; !ok {
 				return fmt.Errorf("unknown module: '%s'. Run 'manifesto modules' to see available", m)
 			}
+			if initQuick && !config.IsQuickModule(m) {
+				return fmt.Errorf("module '%s' is not available for quick projects", m)
+			}
 			selected = append(selected, m)
 		}
 	} else {
 		// Interactive selection.
-		optional := config.OptionalModules()
+		optional := config.OptionalModules(initQuick)
 		if len(optional) > 0 {
 			fmt.Println("  Which optional modules would you like to include?")
 			fmt.Println()
@@ -95,6 +109,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 					}
 					if _, ok := config.ModuleRegistry[m]; !ok {
 						return fmt.Errorf("unknown module: '%s'", m)
+					}
+					if initQuick && !config.IsQuickModule(m) {
+						return fmt.Errorf("module '%s' is not available for quick projects", m)
 					}
 					selected = append(selected, m)
 				}
@@ -128,6 +145,12 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Println()
 
+	// For quick projects, default to quick-project branch.
+	ref := initRef
+	if initQuick && ref == "" {
+		ref = config.QuickProjectRef
+	}
+
 	// Run scaffold.
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -139,7 +162,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		GoModule:    initGoModule,
 		OutputDir:   cwd,
 		Modules:     resolved,
-		Ref:         initRef,
+		Ref:         ref,
 	}); err != nil {
 		return err
 	}

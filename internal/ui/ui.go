@@ -40,6 +40,15 @@ func PrintCreateHeader(projectName, goModule string) {
 	fmt.Println()
 }
 
+func PrintCreateHeaderQuick(projectName, goModule string) {
+	fmt.Println()
+	Magenta.Println("  Creating a new Manifesto", Yellow.Sprint("quick"), "app in", Bold.Sprint("./"+projectName))
+	fmt.Println()
+	Dim.Printf("  module:  %s\n", goModule)
+	Dim.Println("  mode:    quick (no IAM, no migrations)")
+	fmt.Println()
+}
+
 // Spinner provides a CRA-style animated spinner.
 type Spinner struct {
 	message string

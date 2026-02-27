@@ -48,6 +48,23 @@ manifesto init myapp --module github.com/me/myapp --with iam,fsx
 manifesto init myapp --module github.com/me/myapp --all
 ```
 
+### Create a quick project
+
+Use `--quick` for a lightweight project without IAM or migrations. You still get the same interactive selection for optional modules (`fsx`, `asyncx`, `ai`).
+
+```bash
+# Interactive — pick optional modules
+manifesto init myapp --module github.com/me/myapp --quick
+
+# With specific modules
+manifesto init myapp --module github.com/me/myapp --quick --with fsx,asyncx
+
+# All optional modules
+manifesto init myapp --module github.com/me/myapp --quick --all
+```
+
+Quick projects include a smaller set of core modules (`kernel`, `errx`, `logx`, `ptrx`, `config`, `server`) and pull from the [`quick-project`](https://github.com/Abraxas-365/manifesto/tree/quick-project) branch.
+
 ### Add a domain package
 
 ```bash
@@ -189,6 +206,7 @@ For the full architecture guide, patterns, and rationale, see the [Manifesto Arc
 |------|-----------|-------------|
 | `--with <modules>` | `init` | Comma-separated optional modules |
 | `--all` | `init` | Install all modules |
+| `--quick` | `init` | Lightweight project (no IAM, no migrations) |
 | `--ref <version>` | `init`, `install` | Pin manifesto version (default: latest) |
 
 ## Generated Makefile Commands
