@@ -236,12 +236,24 @@ func injectWireServer(projectRoot string, spec config.WireableModule) error {
 		text = strings.Replace(text, "// manifesto:public-routes", routeLine, 1)
 	}
 
-	// Inject auth middleware into protected group
-	if spec.AuthMiddleware != "" {
-		oldGroup := `protected := app.Group("/api/v1")`
-		newGroup := fmt.Sprintf("protected := app.Group(\"/api/v1\",\n\t\t%s,\n\t)", spec.AuthMiddleware)
-		if !strings.Contains(text, spec.AuthMiddleware) {
-			text = strings.Replace(text, oldGroup, newGroup, 1)
+	// Ensure protected group exists if this module needs routes
+	if spec.RouteRegistration != "" || spec.AuthMiddleware != "" {
+		if !strings.Contains(text, "protected :=") {
+			// Create the protected group (with auth middleware if present)
+			if spec.AuthMiddleware != "" {
+				groupCode := fmt.Sprintf("\tprotected := app.Group(\"/api/v1\",\n\t\t%s,\n\t)\n\n\t// manifesto:route-registration", spec.AuthMiddleware)
+				text = strings.Replace(text, "// manifesto:route-registration", groupCode, 1)
+			} else {
+				groupCode := "\tprotected := app.Group(\"/api/v1\")\n\n\t// manifesto:route-registration"
+				text = strings.Replace(text, "// manifesto:route-registration", groupCode, 1)
+			}
+		} else if spec.AuthMiddleware != "" {
+			// Protected group already exists — add middleware
+			oldGroup := `protected := app.Group("/api/v1")`
+			newGroup := fmt.Sprintf("protected := app.Group(\"/api/v1\",\n\t\t%s,\n\t)", spec.AuthMiddleware)
+			if !strings.Contains(text, spec.AuthMiddleware) {
+				text = strings.Replace(text, oldGroup, newGroup, 1)
+			}
 		}
 	}
 

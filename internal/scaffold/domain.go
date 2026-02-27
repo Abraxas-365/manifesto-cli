@@ -152,6 +152,12 @@ func injectIntoServerRoutes(projectRoot string, data DomainData) error {
 		return nil
 	}
 
+	// Ensure protected group exists
+	if !strings.Contains(text, "protected :=") {
+		groupLine := "\tprotected := app.Group(\"/api/v1\")\n\n\t// manifesto:route-registration"
+		text = strings.Replace(text, "// manifesto:route-registration", groupLine, 1)
+	}
+
 	// Inject route registration
 	routeLine := fmt.Sprintf("\tcontainer.%s.RegisterRoutes(protected)\n\t// manifesto:route-registration",
 		data.EntityName)

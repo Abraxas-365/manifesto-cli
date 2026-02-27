@@ -126,12 +126,4 @@ func getEnv(key, fallback string) string {
 	return fallback
 }
 
-func repeatString(s string, count int) string {
-	result := ""
-	for range count {
-		result += s
-	}
-	return result
-}
-
 // manifesto:container-helpers

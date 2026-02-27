@@ -244,16 +244,16 @@ func NewConsoleNotifier() *ConsoleNotifier {
 // SendOTP prints the OTP code to the terminal
 func (n *ConsoleNotifier) SendOTP(ctx context.Context, contact string, code string) error {
 	fmt.Println("\n" + repeatString("=", 60))
-	fmt.Println("OTP NOTIFICATION (Console Output)")
+	fmt.Println("📧 OTP NOTIFICATION (Console Output)")
 	fmt.Println(repeatString("=", 60))
-	fmt.Printf("To: %s\n", contact)
-	fmt.Printf("Code: %s\n", code)
+	fmt.Printf("📨 To: %s\n", contact)
+	fmt.Printf("🔐 Code: %s\n", code)
 	fmt.Println(repeatString("=", 60))
-	fmt.Println("This is console output for development only")
-	fmt.Println("In production, configure email service in config")
+	fmt.Println("⚠️  This is console output for development only")
+	fmt.Println("⚠️  In production, configure email service in config")
 	fmt.Println(repeatString("=", 60) + "\n")
 
-	logx.Infof("OTP sent to %s: %s", contact, code)
+	logx.Infof("📧 OTP sent to %s: %s", contact, code)
 	return nil
 }`,
 
