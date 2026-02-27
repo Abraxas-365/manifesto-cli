@@ -68,6 +68,7 @@ func runWireModule(projectRoot string, manifest *config.Manifest, moduleName str
 		ProjectRoot:  projectRoot,
 		ModuleName:   moduleName,
 		GoModule:     manifest.Project.GoModule,
+		ProjectName:  manifest.Project.Name,
 		WiredModules: manifest.WiredModules,
 	})
 	if err != nil {

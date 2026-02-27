@@ -38,112 +38,6 @@ export REDIS_PASSWORD =
 export REDIS_DB = 0
 
 # ============================================================================
-# Environment Variables - JWT Configuration
-# ============================================================================
-
-export JWT_SECRET_KEY = development-supersecret-key-must-be-at-least-32-characters-long-change-in-prod
-export JWT_ACCESS_TOKEN_TTL = 15m
-export JWT_REFRESH_TOKEN_TTL = 168h
-export JWT_ISSUER = {{ .ProjectName }}
-export JWT_AUDIENCE = {{ .ProjectName }}-api,{{ .ProjectName }}-web
-
-# ============================================================================
-# Environment Variables - API Key Configuration
-# ============================================================================
-
-export API_KEY_LIVE_PREFIX = {{ .ProjectName }}_live
-export API_KEY_TEST_PREFIX = {{ .ProjectName }}_test
-export API_KEY_TOKEN_LENGTH = 32
-
-# ============================================================================
-# Environment Variables - Session Configuration
-# ============================================================================
-
-export SESSION_EXPIRATION_TIME = 24h
-export SESSION_CLEANUP_INTERVAL = 1h
-export SESSION_MAX_PER_USER = 10
-
-# ============================================================================
-# Environment Variables - OTP Configuration
-# ============================================================================
-
-export OTP_CODE_LENGTH = 6
-export OTP_EXPIRATION_TIME = 10m
-export OTP_MAX_ATTEMPTS = 5
-export OTP_RATE_LIMIT_WINDOW = 1m
-export OTP_TOKEN_BYTE_LENGTH = 3
-
-# ============================================================================
-# Environment Variables - Invitation Configuration
-# ============================================================================
-
-export INVITATION_DEFAULT_EXPIRATION_DAYS = 7
-export INVITATION_TOKEN_BYTE_LENGTH = 32
-export INVITATION_MAX_PENDING_PER_TENANT = 100
-
-# ============================================================================
-# Environment Variables - Password Configuration
-# ============================================================================
-
-export PASSWORD_RESET_TOKEN_BYTE_LENGTH = 32
-export PASSWORD_RESET_EXPIRATION_TIME = 1h
-export PASSWORD_RESET_RATE_LIMIT_WINDOW = 15m
-export PASSWORD_RESET_MAX_ATTEMPTS = 3
-export BCRYPT_COST = 10
-
-# ============================================================================
-# Environment Variables - Cookie Configuration
-# ============================================================================
-
-export COOKIE_ACCESS_TOKEN_NAME = access_token
-export COOKIE_REFRESH_TOKEN_NAME = refresh_token
-export COOKIE_DOMAIN =
-export COOKIE_PATH = /
-export COOKIE_SECURE = false
-export COOKIE_HTTP_ONLY = true
-export COOKIE_SAME_SITE = Lax
-
-# ============================================================================
-# Environment Variables - OAuth Configuration
-# ============================================================================
-
-# Google OAuth
-export OAUTH_GOOGLE_ENABLED = false
-export OAUTH_GOOGLE_CLIENT_ID =
-export OAUTH_GOOGLE_CLIENT_SECRET =
-export OAUTH_GOOGLE_REDIRECT_URL = http://localhost:5173/auth/callback/?provider=google
-export OAUTH_GOOGLE_SCOPES = openid,email,profile
-export OAUTH_GOOGLE_AUTH_URL = https://accounts.google.com/o/oauth2/auth
-export OAUTH_GOOGLE_TOKEN_URL = https://oauth2.googleapis.com/token
-export OAUTH_GOOGLE_USER_INFO_URL = https://www.googleapis.com/oauth2/v2/userinfo
-export OAUTH_GOOGLE_TIMEOUT = 30s
-
-# Microsoft OAuth
-export OAUTH_MICROSOFT_ENABLED = false
-export OAUTH_MICROSOFT_CLIENT_ID =
-export OAUTH_MICROSOFT_CLIENT_SECRET =
-export OAUTH_MICROSOFT_REDIRECT_URL = http://localhost:$(SERVER_PORT)/auth/callback/microsoft
-export OAUTH_MICROSOFT_SCOPES = openid,email,profile,User.Read
-export OAUTH_MICROSOFT_AUTH_URL = https://login.microsoftonline.com/common/oauth2/v2.0/authorize
-export OAUTH_MICROSOFT_TOKEN_URL = https://login.microsoftonline.com/common/oauth2/v2.0/token
-export OAUTH_MICROSOFT_USER_INFO_URL = https://graph.microsoft.com/v1.0/me
-export OAUTH_MICROSOFT_TIMEOUT = 30s
-
-# OAuth State Manager
-export OAUTH_STATE_MANAGER_TYPE = redis
-export OAUTH_STATE_TTL = 10m
-
-# ============================================================================
-# Environment Variables - Tenant Configuration
-# ============================================================================
-
-export TENANT_TRIAL_DAYS = 30
-export TENANT_SUBSCRIPTION_YEARS = 1
-export TENANT_MAX_USERS_BASIC = 5
-export TENANT_MAX_USERS_PROFESSIONAL = 50
-export TENANT_MAX_USERS_ENTERPRISE = 500
-
-# ============================================================================
 # Environment Variables - Storage Configuration
 # ============================================================================
 
@@ -151,6 +45,8 @@ export STORAGE_MODE = local
 export UPLOAD_DIR = ./uploads
 export AWS_REGION = us-east-1
 export AWS_BUCKET = {{ .ProjectName }}-uploads
+
+# manifesto:env-config
 
 # ============================================================================
 # Internal Variables
@@ -167,9 +63,9 @@ REDIS_CONTAINER_NAME = {{ .ProjectName }}-redis
 .PHONY: help
 help: ## Show this help message
 	@echo ""
-	@echo "========================================"
-	@echo "  {{ .ProjectName }} - Makefile"
-	@echo "========================================"
+	@echo "╔════════════════════════════════════════════════════════════════╗"
+	@echo "║                  {{ .ProjectName }} - Makefile                          ║"
+	@echo "╚════════════════════════════════════════════════════════════════╝"
 	@echo ""
 	@echo "Available commands:"
 	@echo ""
@@ -182,100 +78,100 @@ help: ## Show this help message
 
 .PHONY: dev
 dev: ## Run the development server
-	@echo "Starting development server..."
+	@echo "🚀 Starting development server..."
 	go mod tidy
 	go run ./cmd
 
 .PHONY: dev-watch
 dev-watch: ## Run dev server with hot reload (requires air)
-	@echo "Starting development server with hot reload..."
+	@echo "🔥 Starting development server with hot reload..."
 	@if command -v air > /dev/null; then \
 		air; \
 	else \
-		echo "'air' not installed. Install with: go install github.com/cosmtrek/air@latest"; \
+		echo "❌ 'air' not installed. Install with: go install github.com/cosmtrek/air@latest"; \
 		echo "Falling back to regular dev mode..."; \
 		make dev; \
 	fi
 
 .PHONY: build
 build: ## Build the application binary
-	@echo "Building application..."
+	@echo "🔨 Building application..."
 	go mod tidy
 	go build -o bin/server ./cmd
-	@echo "Binary created: bin/server"
+	@echo "✅ Binary created: bin/server"
 
 .PHONY: prod
 prod: build ## Build and run production server
-	@echo "Starting production server..."
+	@echo "🚀 Starting production server..."
 	./bin/server
 
 .PHONY: test
 test: ## Run tests
-	@echo "Running tests..."
+	@echo "🧪 Running tests..."
 	go test -v ./...
 
 .PHONY: test-coverage
 test-coverage: ## Run tests with coverage
-	@echo "Running tests with coverage..."
+	@echo "🧪 Running tests with coverage..."
 	go test -v -coverprofile=coverage.out ./...
 	go tool cover -html=coverage.out -o coverage.html
-	@echo "Coverage report: coverage.html"
+	@echo "✅ Coverage report: coverage.html"
 
 .PHONY: test-race
 test-race: ## Run tests with race detector
-	@echo "Running tests with race detector..."
+	@echo "🧪 Running tests with race detector..."
 	go test -race -v ./...
 
 .PHONY: lint
 lint: ## Run linter
-	@echo "Running linter..."
+	@echo "🔍 Running linter..."
 	@if command -v golangci-lint > /dev/null; then \
 		golangci-lint run; \
 	else \
-		echo "golangci-lint not installed"; \
+		echo "❌ golangci-lint not installed"; \
 		echo "Install: https://golangci-lint.run/usage/install/"; \
 	fi
 
 .PHONY: fmt
 fmt: ## Format code
-	@echo "Formatting code..."
+	@echo "✨ Formatting code..."
 	go fmt ./...
-	@echo "Code formatted"
+	@echo "✅ Code formatted"
 
 .PHONY: vet
 vet: ## Run go vet
-	@echo "Running go vet..."
+	@echo "🔍 Running go vet..."
 	go vet ./...
 
 .PHONY: tidy
 tidy: ## Tidy go modules
-	@echo "Tidying go modules..."
+	@echo "🧹 Tidying go modules..."
 	go mod tidy
-	@echo "Modules tidied"
+	@echo "✅ Modules tidied"
 
 # ============================================================================
 # Docker - All Services
 # ============================================================================
 
 .PHONY: up
-up: ## Start all services
-	@echo "Starting all services..."
+up: ## Start all services (postgres + redis)
+	@echo "🐳 Starting all services..."
 	docker compose up -d --remove-orphans
-	@echo "Waiting for services to be ready..."
+	@echo "⏳ Waiting for services to be ready..."
 	@sleep 3
 	@make health
 
 .PHONY: down
 down: ## Stop all services
-	@echo "Stopping all services..."
+	@echo "🛑 Stopping all services..."
 	docker compose down
-	@echo "Services stopped"
+	@echo "✅ Services stopped"
 
 .PHONY: down-v
 down-v: ## Stop all services and remove volumes
-	@echo "Stopping services and removing volumes..."
+	@echo "🛑 Stopping services and removing volumes..."
 	docker compose down -v
-	@echo "Services stopped and volumes removed"
+	@echo "✅ Services stopped and volumes removed"
 
 .PHONY: restart
 restart: down up ## Restart all services
@@ -286,13 +182,13 @@ logs: ## Show logs for all services
 
 .PHONY: health
 health: ## Check health of all services
-	@echo "Checking service health..."
+	@echo "🏥 Checking service health..."
 	@echo ""
 	@echo "PostgreSQL:"
-	@docker exec $(CONTAINER_NAME) pg_isready -U $(POSTGRES_USER) && echo "  Healthy" || echo "  Not ready"
+	@docker exec $(CONTAINER_NAME) pg_isready -U $(POSTGRES_USER) && echo "  ✅ Healthy" || echo "  ❌ Not ready"
 	@echo ""
 	@echo "Redis:"
-	@docker exec $(REDIS_CONTAINER_NAME) redis-cli ping > /dev/null 2>&1 && echo "  Healthy" || echo "  Not ready"
+	@docker exec $(REDIS_CONTAINER_NAME) redis-cli ping > /dev/null 2>&1 && echo "  ✅ Healthy" || echo "  ❌ Not ready"
 
 # ============================================================================
 # Docker - PostgreSQL
@@ -300,12 +196,12 @@ health: ## Check health of all services
 
 .PHONY: postgres-up
 postgres-up: ## Start PostgreSQL only
-	@echo "Starting PostgreSQL..."
+	@echo "🐘 Starting PostgreSQL..."
 	docker compose up -d postgres
-	@echo "Waiting for PostgreSQL to be ready..."
+	@echo "⏳ Waiting for PostgreSQL to be ready..."
 	@sleep 3
 	@docker exec $(CONTAINER_NAME) pg_isready -U $(POSTGRES_USER)
-	@echo "PostgreSQL ready"
+	@echo "✅ PostgreSQL ready"
 
 .PHONY: postgres-down
 postgres-down: ## Stop PostgreSQL
@@ -328,12 +224,12 @@ postgres-shell: ## Open shell in PostgreSQL container
 
 .PHONY: redis-up
 redis-up: ## Start Redis only
-	@echo "Starting Redis..."
+	@echo "🔴 Starting Redis..."
 	docker compose up -d redis
-	@echo "Waiting for Redis to be ready..."
+	@echo "⏳ Waiting for Redis to be ready..."
 	@sleep 2
 	@docker exec $(REDIS_CONTAINER_NAME) redis-cli ping
-	@echo "Redis ready"
+	@echo "✅ Redis ready"
 
 .PHONY: redis-down
 redis-down: ## Stop Redis
@@ -356,13 +252,13 @@ redis-cli: ## Open Redis CLI
 
 .PHONY: redis-flush
 redis-flush: ## Flush all Redis data
-	@echo "Flushing all Redis data..."
+	@echo "⚠️  Flushing all Redis data..."
 	@read -p "Are you sure? (y/N) " confirm; \
 	if [ "$$confirm" = "y" ] || [ "$$confirm" = "Y" ]; then \
 		docker exec $(REDIS_CONTAINER_NAME) redis-cli FLUSHALL; \
-		echo "Redis data flushed"; \
+		echo "✅ Redis data flushed"; \
 	else \
-		echo "Cancelled"; \
+		echo "❌ Cancelled"; \
 	fi
 
 .PHONY: redis-info
@@ -383,19 +279,19 @@ conn: ## Show the PostgreSQL connection string
 
 .PHONY: migrate
 migrate: ## Run database migrations
-	@echo "Running migrations..."
+	@echo "🔄 Running migrations..."
 	@if [ ! -f migrations/001_genesis.sql ]; then \
-		echo "Migration file not found: migrations/001_genesis.sql"; \
-		echo "Create it with: make migrate-create name=genesis"; \
+		echo "❌ Migration file not found: migrations/001_genesis.sql"; \
+		echo "💡 Create it with: make migrate-create name=genesis"; \
 		exit 1; \
 	fi
 	@docker exec -i $(CONTAINER_NAME) psql -U $(POSTGRES_USER) -d $(POSTGRES_DB) < migrations/001_genesis.sql
-	@echo "Migrations completed"
+	@echo "✅ Migrations completed"
 
 .PHONY: migrate-create
 migrate-create: ## Create a new migration file (usage: make migrate-create name=add_users_table)
 	@if [ -z "$(name)" ]; then \
-		echo "Error: name is required"; \
+		echo "❌ Error: name is required"; \
 		echo "Usage: make migrate-create name=add_users_table"; \
 		exit 1; \
 	fi
@@ -407,60 +303,60 @@ migrate-create: ## Create a new migration file (usage: make migrate-create name=
 	echo "" >> $$filename; \
 	echo "-- Add your SQL here" >> $$filename; \
 	echo "" >> $$filename; \
-	echo "Created migration: $$filename"
+	echo "✅ Created migration: $$filename"
 
 .PHONY: seed
 seed: ## Seed test data
-	@echo "Seeding test data..."
+	@echo "🌱 Seeding test data..."
 	@if [ -f migrations/seed_test_data.sql ]; then \
 		docker exec -i $(CONTAINER_NAME) psql -U $(POSTGRES_USER) -d $(POSTGRES_DB) < migrations/seed_test_data.sql; \
-		echo "Test data seeded"; \
+		echo "✅ Test data seeded"; \
 	else \
-		echo "No seed file found (migrations/seed_test_data.sql)"; \
+		echo "⚠️  No seed file found (migrations/seed_test_data.sql)"; \
 	fi
 
 .PHONY: db-clean
 db-clean: ## Clean database (drop all tables)
-	@echo "This will DROP ALL TABLES!"
+	@echo "⚠️  This will DROP ALL TABLES!"
 	@read -p "Are you sure? Type 'yes' to confirm: " confirm; \
 	if [ "$$confirm" = "yes" ]; then \
 		docker exec -i $(CONTAINER_NAME) psql -U $(POSTGRES_USER) -d $(POSTGRES_DB) -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO $(POSTGRES_USER); GRANT ALL ON SCHEMA public TO public;"; \
-		echo "Database cleaned"; \
+		echo "✅ Database cleaned"; \
 	else \
-		echo "Cancelled"; \
+		echo "❌ Cancelled"; \
 	fi
 
 .PHONY: db-reset
 db-reset: db-clean migrate seed ## Full database reset (clean + migrate + seed)
-	@echo "Database reset complete!"
+	@echo "✅ Database reset complete!"
 
 .PHONY: db-backup
 db-backup: ## Backup database to file
 	@timestamp=$$(date +%Y%m%d_%H%M%S); \
 	filename="backups/backup_$${timestamp}.sql"; \
 	mkdir -p backups; \
-	echo "Creating backup..."; \
+	echo "💾 Creating backup..."; \
 	docker exec $(CONTAINER_NAME) pg_dump -U $(POSTGRES_USER) $(POSTGRES_DB) > $$filename; \
-	echo "Backup saved to $$filename"
+	echo "✅ Backup saved to $$filename"
 
 .PHONY: db-restore
 db-restore: ## Restore database from backup (usage: make db-restore file=backups/backup.sql)
 	@if [ -z "$(file)" ]; then \
-		echo "Error: file is required"; \
+		echo "❌ Error: file is required"; \
 		echo "Usage: make db-restore file=backups/backup_20240101_120000.sql"; \
 		exit 1; \
 	fi
 	@if [ ! -f "$(file)" ]; then \
-		echo "File not found: $(file)"; \
+		echo "❌ File not found: $(file)"; \
 		exit 1; \
 	fi
-	@echo "This will restore database from: $(file)"
+	@echo "⚠️  This will restore database from: $(file)"
 	@read -p "Continue? (y/N) " confirm; \
 	if [ "$$confirm" = "y" ] || [ "$$confirm" = "Y" ]; then \
 		docker exec -i $(CONTAINER_NAME) psql -U $(POSTGRES_USER) -d $(POSTGRES_DB) < $(file); \
-		echo "Database restored"; \
+		echo "✅ Database restored"; \
 	else \
-		echo "Cancelled"; \
+		echo "❌ Cancelled"; \
 	fi
 
 # ============================================================================
@@ -470,10 +366,10 @@ db-restore: ## Restore database from backup (usage: make db-restore file=backups
 .PHONY: setup
 setup: up migrate seed ## Full setup (start services + migrate + seed)
 	@echo ""
-	@echo "Setup complete!"
+	@echo "✅ Setup complete!"
 	@echo ""
-	@echo "  PostgreSQL:  localhost:$(POSTGRES_PORT)"
-	@echo "  Redis:       localhost:$(REDIS_PORT)"
+	@echo "  🐘 PostgreSQL:  localhost:$(POSTGRES_PORT)"
+	@echo "  🔴 Redis:       localhost:$(REDIS_PORT)"
 	@echo ""
 	@echo "Start the server with:"
 	@echo "  make dev         (development mode)"
@@ -483,7 +379,7 @@ setup: up migrate seed ## Full setup (start services + migrate + seed)
 .PHONY: init
 init: tidy setup ## Initialize project (tidy + setup)
 	@echo ""
-	@echo "Project initialized!"
+	@echo "✅ Project initialized!"
 	@echo ""
 	@echo "Next steps:"
 	@echo "  1. Run: make dev"
@@ -496,21 +392,21 @@ init: tidy setup ## Initialize project (tidy + setup)
 
 .PHONY: clean
 clean: down-v ## Stop services and remove volumes
-	@echo "Cleaning up..."
+	@echo "🧹 Cleaning up..."
 	rm -rf bin/
 	rm -f coverage.out coverage.html
-	@echo "Cleanup complete"
+	@echo "✅ Cleanup complete"
 
 .PHONY: clean-all
 clean-all: clean ## Clean everything including Docker images
 	docker compose down --rmi all --volumes --remove-orphans
-	@echo "Full cleanup complete"
+	@echo "✅ Full cleanup complete"
 
 .PHONY: clean-uploads
 clean-uploads: ## Remove uploaded files
-	@echo "Cleaning uploads..."
+	@echo "🧹 Cleaning uploads..."
 	rm -rf $(UPLOAD_DIR)/*
-	@echo "Uploads cleaned"
+	@echo "✅ Uploads cleaned"
 
 # ============================================================================
 # Utility & Info
@@ -519,9 +415,9 @@ clean-uploads: ## Remove uploaded files
 .PHONY: env
 env: ## Show current environment variables
 	@echo ""
-	@echo "========================================"
-	@echo "  Environment Configuration"
-	@echo "========================================"
+	@echo "╔════════════════════════════════════════════════════════════════╗"
+	@echo "║                  Environment Configuration                     ║"
+	@echo "╚════════════════════════════════════════════════════════════════╝"
 	@echo ""
 	@echo "Server:"
 	@echo "  PORT:              $(SERVER_PORT)"
@@ -544,6 +440,7 @@ env: ## Show current environment variables
 	@echo "  MODE:              $(STORAGE_MODE)"
 	@echo "  UPLOAD_DIR:        $(UPLOAD_DIR)"
 	@echo ""
+	# manifesto:env-display
 	@echo "Connection:"
 	@echo "  $(CONN_STRING)"
 	@echo ""
@@ -562,27 +459,27 @@ deps: ## Show project dependencies
 
 .PHONY: deps-update
 deps-update: ## Update all dependencies
-	@echo "Updating dependencies..."
+	@echo "📦 Updating dependencies..."
 	go get -u ./...
 	go mod tidy
-	@echo "Dependencies updated"
+	@echo "✅ Dependencies updated"
 
 .PHONY: check-deps
 check-deps: ## Check if required tools are installed
-	@echo "Checking dependencies..."
+	@echo "🔍 Checking dependencies..."
 	@echo ""
-	@command -v go > /dev/null && echo "Go installed" || echo "Go not installed"
-	@command -v docker > /dev/null && echo "Docker installed" || echo "Docker not installed"
-	@command -v golangci-lint > /dev/null && echo "golangci-lint installed" || echo "golangci-lint (optional)"
-	@command -v air > /dev/null && echo "air installed" || echo "air (optional, for hot reload)"
+	@command -v go > /dev/null && echo "✅ Go" || echo "❌ Go not installed"
+	@command -v docker > /dev/null && echo "✅ Docker" || echo "❌ Docker not installed"
+	@command -v golangci-lint > /dev/null && echo "✅ golangci-lint" || echo "⚠️  golangci-lint (optional)"
+	@command -v air > /dev/null && echo "✅ air" || echo "⚠️  air (optional, for hot reload)"
 	@echo ""
 
 .PHONY: install-tools
 install-tools: ## Install development tools
-	@echo "Installing development tools..."
+	@echo "🔧 Installing development tools..."
 	go install github.com/cosmtrek/air@latest
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-	@echo "Tools installed"
+	@echo "✅ Tools installed"
 
 # ============================================================================
 # Aliases

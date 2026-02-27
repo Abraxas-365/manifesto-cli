@@ -15,19 +15,20 @@ type WireOptions struct {
 	ProjectRoot  string
 	ModuleName   string
 	GoModule     string   // From manifest
+	ProjectName  string   // From manifest
 	WiredModules []string // Already wired modules (for bridge detection)
 }
 
 // WireModule wires a module into the project by injecting code at marker points
-// in config.go, container.go, and server.go. Returns the list of modified files.
+// in config.go, container.go, server.go, and Makefile. Returns the list of modified files.
 func WireModule(opts WireOptions) ([]string, error) {
 	spec, ok := config.WireableModuleRegistry[opts.ModuleName]
 	if !ok {
 		return nil, fmt.Errorf("unknown wireable module: %s", opts.ModuleName)
 	}
 
-	// Replace {{GOMODULE}} placeholder with actual module path.
-	spec = replaceGoModuleInSpec(spec, opts.GoModule)
+	// Replace placeholders with actual project values.
+	spec = replacePlaceholders(spec, opts.GoModule, opts.ProjectName)
 
 	var modified []string
 
@@ -53,17 +54,25 @@ func WireModule(opts WireOptions) ([]string, error) {
 		modified = append(modified, "cmd/server.go")
 	}
 
-	// 4. Check cross-module bridges
+	// 4. Inject into Makefile
+	if spec.MakefileEnv != "" || spec.MakefileEnvDisplay != "" {
+		if err := injectIntoMakefile(opts.ProjectRoot, spec); err != nil {
+			return nil, fmt.Errorf("wire makefile: %w", err)
+		}
+		modified = append(modified, "Makefile")
+	}
+
+	// 5. Check cross-module bridges
 	for _, bridge := range spec.Bridges {
 		if hasWiredModule(opts.WiredModules, bridge.RequiresModule) {
-			bridgeSpec := replaceBridgeGoModule(bridge, opts.GoModule)
+			bridgeSpec := replaceBridgePlaceholders(bridge, opts.GoModule, opts.ProjectName)
 			if err := injectBridge(opts.ProjectRoot, bridgeSpec); err != nil {
 				return nil, fmt.Errorf("wire bridge (%s+%s): %w", opts.ModuleName, bridge.RequiresModule, err)
 			}
 		}
 	}
 
-	// 5. Install external Go dependencies
+	// 6. Install external Go dependencies
 	if len(spec.GoDeps) > 0 {
 		if err := installGoDeps(opts.ProjectRoot, spec.GoDeps); err != nil {
 			return nil, fmt.Errorf("install deps: %w", err)
@@ -246,6 +255,54 @@ func injectWireServer(projectRoot string, spec config.WireableModule) error {
 }
 
 // ---------------------------------------------------------------------------
+// Makefile injection
+// ---------------------------------------------------------------------------
+
+func injectIntoMakefile(projectRoot string, spec config.WireableModule) error {
+	makefilePath := filepath.Join(projectRoot, "Makefile")
+
+	content, err := os.ReadFile(makefilePath)
+	if err != nil {
+		return nil // Makefile might not exist
+	}
+
+	text := string(content)
+
+	// Guard: check if already injected
+	if spec.MakefileEnv != "" {
+		firstLine := strings.Split(strings.TrimSpace(spec.MakefileEnv), "\n")[0]
+		if strings.Contains(text, strings.TrimSpace(firstLine)) {
+			return nil
+		}
+	}
+
+	// Inject env config block (top-level, no tab prefix)
+	if spec.MakefileEnv != "" {
+		envBlock := spec.MakefileEnv + "\n\n# manifesto:env-config"
+		text = strings.Replace(text, "# manifesto:env-config", envBlock, 1)
+	}
+
+	// Inject env display lines (inside make recipe, needs tab prefix)
+	if spec.MakefileEnvDisplay != "" {
+		displayBlock := tabPrefixLines(spec.MakefileEnvDisplay) + "\n\t# manifesto:env-display"
+		text = strings.Replace(text, "\t# manifesto:env-display", displayBlock, 1)
+	}
+
+	return os.WriteFile(makefilePath, []byte(text), 0644)
+}
+
+// tabPrefixLines adds a leading tab to every non-empty line.
+func tabPrefixLines(s string) string {
+	lines := strings.Split(s, "\n")
+	for i, line := range lines {
+		if line != "" {
+			lines[i] = "\t" + line
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+// ---------------------------------------------------------------------------
 // Bridge injection
 // ---------------------------------------------------------------------------
 
@@ -327,10 +384,14 @@ func insertMarkerBeforeClosingBrace(text, opener, marker string) string {
 	return text[:pos] + "\t" + marker + "\n" + text[pos:]
 }
 
-func replaceGoModuleInSpec(spec config.WireableModule, goModule string) config.WireableModule {
+func replacePlaceholders(spec config.WireableModule, goModule, projectName string) config.WireableModule {
 	r := func(s string) string {
-		return strings.ReplaceAll(s, "{{GOMODULE}}", goModule)
+		s = strings.ReplaceAll(s, "{{GOMODULE}}", goModule)
+		s = strings.ReplaceAll(s, "{{PROJECTNAME}}", projectName)
+		return s
 	}
+	spec.ConfigFields = r(spec.ConfigFields)
+	spec.ConfigLoads = r(spec.ConfigLoads)
 	spec.ContainerImports = r(spec.ContainerImports)
 	spec.ContainerFields = r(spec.ContainerFields)
 	spec.ModuleInit = r(spec.ModuleInit)
@@ -339,6 +400,8 @@ func replaceGoModuleInSpec(spec config.WireableModule, goModule string) config.W
 	spec.ServerImports = r(spec.ServerImports)
 	spec.PublicRoutes = r(spec.PublicRoutes)
 	spec.RouteRegistration = r(spec.RouteRegistration)
+	spec.MakefileEnv = r(spec.MakefileEnv)
+	spec.MakefileEnvDisplay = r(spec.MakefileEnvDisplay)
 
 	for i, bridge := range spec.Bridges {
 		spec.Bridges[i].ContainerImports = r(bridge.ContainerImports)
@@ -348,9 +411,11 @@ func replaceGoModuleInSpec(spec config.WireableModule, goModule string) config.W
 	return spec
 }
 
-func replaceBridgeGoModule(bridge config.Bridge, goModule string) config.Bridge {
+func replaceBridgePlaceholders(bridge config.Bridge, goModule, projectName string) config.Bridge {
 	r := func(s string) string {
-		return strings.ReplaceAll(s, "{{GOMODULE}}", goModule)
+		s = strings.ReplaceAll(s, "{{GOMODULE}}", goModule)
+		s = strings.ReplaceAll(s, "{{PROJECTNAME}}", projectName)
+		return s
 	}
 	bridge.ContainerImports = r(bridge.ContainerImports)
 	bridge.ContainerInit = r(bridge.ContainerInit)

@@ -150,6 +150,7 @@ func InitProject(opts InitOptions) error {
 			ProjectRoot:  projectRoot,
 			ModuleName:   wireMod,
 			GoModule:     opts.GoModule,
+			ProjectName:  opts.ProjectName,
 			WiredModules: manifest.WiredModules,
 		})
 		if err != nil {

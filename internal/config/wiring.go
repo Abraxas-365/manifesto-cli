@@ -1,7 +1,7 @@
 package config
 
 // WireableModule defines a module that can be wired into a project's
-// container, config, and server via code injection at marker points.
+// container, config, server, and Makefile via code injection at marker points.
 type WireableModule struct {
 	Name        string
 	Description string
@@ -22,6 +22,10 @@ type WireableModule struct {
 	PublicRoutes      string // Public (unauthenticated) routes
 	RouteRegistration string // Protected routes
 	AuthMiddleware    string // Middleware for protected group
+
+	// Makefile injection (Makefile)
+	MakefileEnv        string // Environment variable blocks (top-level exports)
+	MakefileEnvDisplay string // @echo lines for `make env` target (NO leading tab — added by injector)
 
 	// External Go dependencies to install
 	GoDeps []string
@@ -68,6 +72,28 @@ var WireableModuleRegistry = map[string]WireableModule{
 	"{{GOMODULE}}/pkg/notifx/notifxses"`,
 		ContainerFields: `	NotificationService notifx.NotificationService`,
 		ModuleInit:      `	c.NotificationService = notifxses.NewSESNotifier(c.Config.Email.AWSRegion)`,
+
+		MakefileEnv: `# ============================================================================
+# Environment Variables - Email Configuration
+# ============================================================================
+
+export EMAIL_PROVIDER = ses
+export EMAIL_FROM_ADDRESS = noreply@{{PROJECTNAME}}.com
+export EMAIL_FROM_NAME = {{PROJECTNAME}}
+
+# SMTP Configuration (if using SMTP)
+export SMTP_HOST =
+export SMTP_PORT = 587
+export SMTP_USERNAME =
+export SMTP_PASSWORD =
+
+# AWS SES Configuration
+export AWS_SES_REGION = us-east-1`,
+
+		MakefileEnvDisplay: `@echo "Email:"
+@echo "  PROVIDER:          $(EMAIL_PROVIDER)"
+@echo "  FROM:              $(EMAIL_FROM_ADDRESS)"
+@echo ""`,
 
 		GoDeps: []string{
 			"github.com/aws/aws-sdk-go-v2/service/sesv2",
@@ -140,6 +166,123 @@ func (n *ConsoleNotifier) SendOTP(ctx context.Context, contact string, code stri
 	logx.Infof("OTP sent to %s: %s", contact, code)
 	return nil
 }`,
+
+		MakefileEnv: `# ============================================================================
+# Environment Variables - JWT Configuration
+# ============================================================================
+
+export JWT_SECRET_KEY = development-supersecret-key-must-be-at-least-32-characters-long-change-in-prod
+export JWT_ACCESS_TOKEN_TTL = 15m
+export JWT_REFRESH_TOKEN_TTL = 168h
+export JWT_ISSUER = {{PROJECTNAME}}
+export JWT_AUDIENCE = {{PROJECTNAME}}-api,{{PROJECTNAME}}-web
+
+# ============================================================================
+# Environment Variables - API Key Configuration
+# ============================================================================
+
+export API_KEY_LIVE_PREFIX = {{PROJECTNAME}}_live
+export API_KEY_TEST_PREFIX = {{PROJECTNAME}}_test
+export API_KEY_TOKEN_LENGTH = 32
+
+# ============================================================================
+# Environment Variables - Session Configuration
+# ============================================================================
+
+export SESSION_EXPIRATION_TIME = 24h
+export SESSION_CLEANUP_INTERVAL = 1h
+export SESSION_MAX_PER_USER = 10
+
+# ============================================================================
+# Environment Variables - OTP Configuration
+# ============================================================================
+
+export OTP_CODE_LENGTH = 6
+export OTP_EXPIRATION_TIME = 10m
+export OTP_MAX_ATTEMPTS = 5
+export OTP_RATE_LIMIT_WINDOW = 1m
+export OTP_TOKEN_BYTE_LENGTH = 3
+
+# ============================================================================
+# Environment Variables - Invitation Configuration
+# ============================================================================
+
+export INVITATION_DEFAULT_EXPIRATION_DAYS = 7
+export INVITATION_TOKEN_BYTE_LENGTH = 32
+export INVITATION_MAX_PENDING_PER_TENANT = 100
+
+# ============================================================================
+# Environment Variables - Password Configuration
+# ============================================================================
+
+export PASSWORD_RESET_TOKEN_BYTE_LENGTH = 32
+export PASSWORD_RESET_EXPIRATION_TIME = 1h
+export PASSWORD_RESET_RATE_LIMIT_WINDOW = 15m
+export PASSWORD_RESET_MAX_ATTEMPTS = 3
+export BCRYPT_COST = 10
+
+# ============================================================================
+# Environment Variables - Cookie Configuration
+# ============================================================================
+
+export COOKIE_ACCESS_TOKEN_NAME = access_token
+export COOKIE_REFRESH_TOKEN_NAME = refresh_token
+export COOKIE_DOMAIN =
+export COOKIE_PATH = /
+export COOKIE_SECURE = false
+export COOKIE_HTTP_ONLY = true
+export COOKIE_SAME_SITE = Lax
+
+# ============================================================================
+# Environment Variables - OAuth Configuration
+# ============================================================================
+
+# Google OAuth
+export OAUTH_GOOGLE_ENABLED = false
+export OAUTH_GOOGLE_CLIENT_ID =
+export OAUTH_GOOGLE_CLIENT_SECRET =
+export OAUTH_GOOGLE_REDIRECT_URL = http://localhost:5173/auth/callback/?provider=google
+export OAUTH_GOOGLE_SCOPES = openid,email,profile
+export OAUTH_GOOGLE_AUTH_URL = https://accounts.google.com/o/oauth2/auth
+export OAUTH_GOOGLE_TOKEN_URL = https://oauth2.googleapis.com/token
+export OAUTH_GOOGLE_USER_INFO_URL = https://www.googleapis.com/oauth2/v2/userinfo
+export OAUTH_GOOGLE_TIMEOUT = 30s
+
+# Microsoft OAuth
+export OAUTH_MICROSOFT_ENABLED = false
+export OAUTH_MICROSOFT_CLIENT_ID =
+export OAUTH_MICROSOFT_CLIENT_SECRET =
+export OAUTH_MICROSOFT_REDIRECT_URL = http://localhost:$(SERVER_PORT)/auth/callback/microsoft
+export OAUTH_MICROSOFT_SCOPES = openid,email,profile,User.Read
+export OAUTH_MICROSOFT_AUTH_URL = https://login.microsoftonline.com/common/oauth2/v2.0/authorize
+export OAUTH_MICROSOFT_TOKEN_URL = https://login.microsoftonline.com/common/oauth2/v2.0/token
+export OAUTH_MICROSOFT_USER_INFO_URL = https://graph.microsoft.com/v1.0/me
+export OAUTH_MICROSOFT_TIMEOUT = 30s
+
+# OAuth State Manager
+export OAUTH_STATE_MANAGER_TYPE = redis
+export OAUTH_STATE_TTL = 10m
+
+# ============================================================================
+# Environment Variables - Tenant Configuration
+# ============================================================================
+
+export TENANT_TRIAL_DAYS = 30
+export TENANT_SUBSCRIPTION_YEARS = 1
+export TENANT_MAX_USERS_BASIC = 5
+export TENANT_MAX_USERS_PROFESSIONAL = 50
+export TENANT_MAX_USERS_ENTERPRISE = 500`,
+
+		MakefileEnvDisplay: `@echo "JWT:"
+@echo "  ISSUER:            $(JWT_ISSUER)"
+@echo "  ACCESS_TTL:        $(JWT_ACCESS_TOKEN_TTL)"
+@echo "  REFRESH_TTL:       $(JWT_REFRESH_TOKEN_TTL)"
+@echo ""
+@echo "OAuth:"
+@echo "  GOOGLE:            $(OAUTH_GOOGLE_ENABLED)"
+@echo "  MICROSOFT:         $(OAUTH_MICROSOFT_ENABLED)"
+@echo "  STATE_MANAGER:     $(OAUTH_STATE_MANAGER_TYPE)"
+@echo ""`,
 
 		PublicRoutes: `	// IAM Routes
 	container.IAM.OAuthHandlers.RegisterRoutes(app)
