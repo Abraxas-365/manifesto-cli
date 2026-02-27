@@ -129,70 +129,105 @@ export AWS_BUCKET = {{PROJECTNAME}}-uploads`,
 
 	"jobx": {
 		Name:        "jobx",
-		Description: "Async job processing with Redis-backed dispatcher",
+		Description: "Redis-backed job queue with worker pools",
 
 		RequiredModules: []string{"jobx", "asyncx"},
 
-		ContainerImports: `	"{{GOMODULE}}/pkg/asyncx"`,
-		ContainerFields:  `	Dispatcher *asyncx.Dispatcher`,
-		ModuleInit:       `	c.Dispatcher = asyncx.NewDispatcher(c.Redis, logx.DefaultLogger())`,
-		BackgroundStart:  `	c.Dispatcher.Start(ctx)`,
+		ConfigFields: `	Jobx JobxConfig`,
+		ConfigLoads:  `	cfg.Jobx = loadJobxConfig()`,
 
-		Bridges: []Bridge{
-			{
-				RequiresModule:   "notifx",
-				ContainerImports: `	"{{GOMODULE}}/pkg/notifx"`,
-				ContainerInit:    `	c.Dispatcher.Register("notifx:send_email", notifx.SendEmailHandler(c.NotificationService))`,
-			},
-		},
+		ContainerImports: `	"{{GOMODULE}}/pkg/jobx"
+	"{{GOMODULE}}/pkg/jobx/jobxredis"`,
+		ContainerFields: `	JobClient *jobx.Client`,
+		ModuleInit:      `	c.initJobx()`,
+		BackgroundStart: `	c.JobClient.Start(ctx)`,
+
+		ContainerHelpers: `func (c *Container) initJobx() {
+	queue := jobxredis.NewRedisQueue(c.Redis)
+	c.JobClient = jobx.NewClient(queue,
+		jobx.WithConcurrency(c.Config.Jobx.Concurrency),
+		jobx.WithQueues(c.Config.Jobx.Queues...),
+		jobx.WithPollInterval(c.Config.Jobx.PollInterval),
+		jobx.WithShutdownTimeout(c.Config.Jobx.ShutdownTimeout),
+		jobx.WithDequeueTimeout(c.Config.Jobx.DequeueTimeout),
+		jobx.WithDefaultRetryDelay(c.Config.Jobx.DefaultRetryDelay),
+	)
+	logx.Info("  Job queue configured")
+}`,
+
+		MakefileEnv: `# ============================================================================
+# Environment Variables - Job Queue Configuration
+# ============================================================================
+
+export JOBX_CONCURRENCY = 4
+export JOBX_QUEUES = default
+export JOBX_POLL_INTERVAL = 1s
+export JOBX_SHUTDOWN_TIMEOUT = 30s
+export JOBX_DEQUEUE_TIMEOUT = 5s
+export JOBX_DEFAULT_RETRY_DELAY = 30s`,
+
+		MakefileEnvDisplay: `@echo "Jobx:"
+@echo "  CONCURRENCY:       $(JOBX_CONCURRENCY)"
+@echo "  QUEUES:            $(JOBX_QUEUES)"
+@echo ""`,
 	},
 
 	"notifx": {
 		Name:        "notifx",
-		Description: "Email notifications via AWS SES",
+		Description: "Email notifications (SES, console)",
 
 		RequiredModules: []string{"notifx"},
 
-		ConfigFields: `	Email EmailConfig`,
-		ConfigLoads:  `	cfg.Email = loadEmailConfig()`,
+		ConfigFields: `	Notifx NotifxConfig`,
+		ConfigLoads:  `	cfg.Notifx = loadNotifxConfig()`,
 
 		ContainerImports: `	"{{GOMODULE}}/pkg/notifx"
-	"{{GOMODULE}}/pkg/notifx/notifxses"`,
-		ContainerFields: `	NotificationService notifx.NotificationService`,
-		ModuleInit:      `	c.NotificationService = notifxses.NewSESNotifier(c.Config.Email.AWSRegion)`,
+	"{{GOMODULE}}/pkg/notifx/notifxses"
+	"{{GOMODULE}}/pkg/notifx/notifxconsole"
+	awsConfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/ses"`,
+		ContainerFields: `	NotifxClient *notifx.Client`,
+		ModuleInit:      `	c.initNotifx()`,
+
+		ContainerHelpers: `func (c *Container) initNotifx() {
+	var provider notifx.EmailSender
+
+	switch c.Config.Notifx.Provider {
+	case "ses":
+		awsCfg, err := awsConfig.LoadDefaultConfig(context.TODO(),
+			awsConfig.WithRegion(c.Config.Notifx.AWSRegion))
+		if err != nil {
+			logx.Fatalf("Unable to load AWS config for notifx: %v", err)
+		}
+		sesClient := ses.NewFromConfig(awsCfg)
+		provider = notifxses.NewSESProvider(sesClient, c.Config.Notifx.FromAddress)
+		logx.Infof("  Notifx: SES provider (region: %s)", c.Config.Notifx.AWSRegion)
+
+	default:
+		provider = notifxconsole.NewConsoleProvider()
+		logx.Info("  Notifx: console provider (dev mode)")
+	}
+
+	c.NotifxClient = notifx.NewClient(provider)
+}`,
 
 		MakefileEnv: `# ============================================================================
-# Environment Variables - Email Configuration
+# Environment Variables - Notification Configuration
 # ============================================================================
 
-export EMAIL_PROVIDER = ses
-export EMAIL_FROM_ADDRESS = noreply@{{PROJECTNAME}}.com
-export EMAIL_FROM_NAME = {{PROJECTNAME}}
+export NOTIFX_PROVIDER = console
+export NOTIFX_FROM_ADDRESS = noreply@{{PROJECTNAME}}.com
+export NOTIFX_FROM_NAME = {{PROJECTNAME}}
+export NOTIFX_AWS_REGION = us-east-1`,
 
-# SMTP Configuration (if using SMTP)
-export SMTP_HOST =
-export SMTP_PORT = 587
-export SMTP_USERNAME =
-export SMTP_PASSWORD =
-
-# AWS SES Configuration
-export AWS_SES_REGION = us-east-1`,
-
-		MakefileEnvDisplay: `@echo "Email:"
-@echo "  PROVIDER:          $(EMAIL_PROVIDER)"
-@echo "  FROM:              $(EMAIL_FROM_ADDRESS)"
+		MakefileEnvDisplay: `@echo "Notifx:"
+@echo "  PROVIDER:          $(NOTIFX_PROVIDER)"
+@echo "  FROM:              $(NOTIFX_FROM_ADDRESS)"
 @echo ""`,
 
 		GoDeps: []string{
-			"github.com/aws/aws-sdk-go-v2/service/sesv2",
-		},
-
-		Bridges: []Bridge{
-			{
-				RequiresModule:   "jobx",
-				ContainerImports: `	"{{GOMODULE}}/pkg/notifx"`,
-				ContainerInit:    `	c.Dispatcher.Register("notifx:send_email", notifx.SendEmailHandler(c.NotificationService))`,
-			},
+			"github.com/aws/aws-sdk-go-v2/config",
+			"github.com/aws/aws-sdk-go-v2/service/ses",
 		},
 	},
 
@@ -202,25 +237,13 @@ export AWS_SES_REGION = us-east-1`,
 
 		RequiredModules: []string{"iam", "migrations"},
 
-		ConfigFields: `	JWT           JWTConfig
-	Session       SessionConfig
-	OTP           OTPConfig
-	OAuth         OAuthConfig
-	Cookie        CookieConfig
-	Invitation    InvitationConfig
-	PasswordReset PasswordResetConfig
-	APIKey        APIKeyConfig
-	Tenant        TenantConfig`,
+		ConfigFields: `	Auth         AuthConfig
+	OAuth        OAuthConfig
+	TenantConfig TenantConfig`,
 
-		ConfigLoads: `	cfg.JWT = loadJWTConfig()
-	cfg.Session = loadSessionConfig()
-	cfg.OTP = loadOTPConfig()
+		ConfigLoads: `	cfg.Auth = loadAuthConfig()
 	cfg.OAuth = loadOAuthConfig()
-	cfg.Cookie = loadCookieConfig()
-	cfg.Invitation = loadInvitationConfig()
-	cfg.PasswordReset = loadPasswordResetConfig()
-	cfg.APIKey = loadAPIKeyConfig()
-	cfg.Tenant = loadTenantConfig()`,
+	cfg.TenantConfig = loadTenantConfig()`,
 
 		ContainerImports: `	"{{GOMODULE}}/pkg/iam/iamcontainer"`,
 		ContainerFields:  `	IAM *iamcontainer.Container`,

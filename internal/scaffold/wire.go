@@ -169,10 +169,24 @@ func injectWireContainer(projectRoot string, spec config.WireableModule) error {
 		return nil
 	}
 
-	// Inject imports
+	// Inject imports (line by line to skip duplicates)
 	if spec.ContainerImports != "" {
-		importLine := spec.ContainerImports + "\n\t// manifesto:container-imports"
-		text = strings.Replace(text, "// manifesto:container-imports", importLine, 1)
+		for _, line := range strings.Split(spec.ContainerImports, "\n") {
+			trimmed := strings.TrimSpace(line)
+			if trimmed == "" {
+				continue
+			}
+			// Extract quoted import path for duplicate detection
+			importCheck := trimmed
+			if idx := strings.Index(trimmed, `"`); idx != -1 {
+				importCheck = trimmed[idx:]
+			}
+			if strings.Contains(text, importCheck) {
+				continue
+			}
+			importLine := "\t" + trimmed + "\n\t// manifesto:container-imports"
+			text = strings.Replace(text, "// manifesto:container-imports", importLine, 1)
+		}
 	}
 
 	// Inject fields
