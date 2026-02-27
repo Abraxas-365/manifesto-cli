@@ -141,8 +141,20 @@ func InitProject(opts InitOptions) error {
 	}
 	spin.Stop(true)
 
-	// Step 6: Wire requested modules.
+	// Step 6: Wire requested modules (download required source first).
 	for _, wireMod := range opts.WireModules {
+		spec, ok := config.WireableModuleRegistry[wireMod]
+		if !ok {
+			return fmt.Errorf("unknown wireable module: %s", wireMod)
+		}
+
+		// Download required source modules if not already present.
+		if len(spec.RequiredModules) > 0 {
+			if err := EnsureModulesPresent(projectRoot, manifest, spec.RequiredModules, client, ref); err != nil {
+				return fmt.Errorf("download deps for %s: %w", wireMod, err)
+			}
+		}
+
 		spin = ui.NewSpinner(fmt.Sprintf("Wiring %s...", wireMod))
 		spin.Start()
 
@@ -214,6 +226,44 @@ func generateGoMod(projectRoot, goModule string, client *remote.Client, ref stri
 	}
 
 	return os.WriteFile(filepath.Join(projectRoot, "go.mod"), buf.Bytes(), 0644)
+}
+
+// EnsureModulesPresent downloads any required source modules that aren't already installed.
+// It updates the manifest's Modules map for each newly downloaded module.
+func EnsureModulesPresent(projectRoot string, manifest *config.Manifest, requiredModules []string, client *remote.Client, ref string) error {
+	var toDownload []string
+	var allPaths []string
+
+	resolved := config.ResolveDeps(requiredModules)
+
+	for _, modName := range resolved {
+		if _, exists := manifest.Modules[modName]; exists {
+			continue
+		}
+		mod, ok := config.ModuleRegistry[modName]
+		if !ok || len(mod.Paths) == 0 {
+			continue
+		}
+		toDownload = append(toDownload, modName)
+		allPaths = append(allPaths, mod.Paths...)
+	}
+
+	if len(toDownload) == 0 {
+		return nil
+	}
+
+	if err := client.FetchModulePaths(ref, allPaths, projectRoot, ManifestoGoModule, manifest.Project.GoModule); err != nil {
+		return fmt.Errorf("download modules: %w", err)
+	}
+
+	for _, modName := range toDownload {
+		manifest.Modules[modName] = config.ModuleConfig{
+			Version:     ref,
+			InstalledAt: time.Now(),
+		}
+	}
+
+	return nil
 }
 
 func generateGitignore(projectRoot string) error {

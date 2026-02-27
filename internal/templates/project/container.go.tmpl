@@ -6,12 +6,7 @@ import (
 	"os"
 
 	"{{.GoModule}}/pkg/config"
-	"{{.GoModule}}/pkg/fsx"
-	"{{.GoModule}}/pkg/fsx/fsxlocal"
-	"{{.GoModule}}/pkg/fsx/fsxs3"
 	"{{.GoModule}}/pkg/logx"
-	awsConfig "github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 	"github.com/redis/go-redis/v9"
@@ -23,10 +18,8 @@ type Container struct {
 	Config *config.Config
 
 	// Infrastructure
-	DB         *sqlx.DB
-	Redis      *redis.Client
-	FileSystem fsx.FileSystem
-	S3Client   *s3.Client
+	DB    *sqlx.DB
+	Redis *redis.Client
 
 	// Bounded-context containers
 	// manifesto:container-fields
@@ -82,40 +75,7 @@ func (c *Container) initInfrastructure() {
 	}
 	logx.Info("  Redis connected")
 
-	// File storage
-	c.initFileStorage()
-
 	logx.Info("Infrastructure initialized")
-}
-
-func (c *Container) initFileStorage() {
-	storageMode := getEnv("STORAGE_MODE", "local")
-
-	switch storageMode {
-	case "s3":
-		awsRegion := getEnv("AWS_REGION", "us-east-1")
-		awsBucket := getEnv("AWS_BUCKET", "{{.ProjectName}}-uploads")
-
-		cfg, err := awsConfig.LoadDefaultConfig(context.TODO(), awsConfig.WithRegion(awsRegion))
-		if err != nil {
-			logx.Fatalf("Unable to load AWS SDK config: %v", err)
-		}
-		c.S3Client = s3.NewFromConfig(cfg)
-		c.FileSystem = fsxs3.NewS3FileSystem(c.S3Client, awsBucket, "")
-		logx.Infof("  S3 file system configured (bucket: %s, region: %s)", awsBucket, awsRegion)
-
-	case "local":
-		uploadDir := getEnv("UPLOAD_DIR", "./uploads")
-		localFS, err := fsxlocal.NewLocalFileSystem(uploadDir)
-		if err != nil {
-			logx.Fatalf("Failed to initialize local file system: %v", err)
-		}
-		c.FileSystem = localFS
-		logx.Infof("  Local file system configured (path: %s)", localFS.GetBasePath())
-
-	default:
-		logx.Fatalf("Unknown STORAGE_MODE: %s (use 'local' or 's3')", storageMode)
-	}
 }
 
 // ---------------------------------------------------------------------------

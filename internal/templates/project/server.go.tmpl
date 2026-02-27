@@ -181,17 +181,6 @@ func healthCheckHandler(container *Container) fiber.Handler {
 			health["redis"] = "healthy"
 		}
 
-		// Check storage (optional — can be slow)
-		if c.QueryBool("check_storage", false) {
-			if exists, err := container.FileSystem.Exists(c.Context(), ".health-check"); err != nil {
-				health["storage"] = "unhealthy"
-				health["storage_error"] = err.Error()
-			} else {
-				health["storage"] = "healthy"
-				health["storage_accessible"] = exists
-			}
-		}
-
 		status := fiber.StatusOK
 		if health["status"] == "degraded" {
 			status = fiber.StatusServiceUnavailable

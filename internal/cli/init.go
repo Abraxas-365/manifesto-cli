@@ -26,10 +26,12 @@ var initCmd = &cobra.Command{
 	Short: "Create a new Manifesto app",
 	Long: `Create a new Go project with the Manifesto architecture.
 
-All libraries are included by default (kernel, errx, logx, ptrx,
-asyncx, config, fsx, ai, etc).
+Core libraries are included by default (kernel, errx, logx, ptrx, config).
 
-Wireable modules can be added during init or later with 'manifesto add':
+Modules can be added during init or later with 'manifesto add':
+  fsx     File system abstraction (local, S3)
+  asyncx  Async primitives (futures, fan-out, pools, retry)
+  ai      LLM, embeddings, vector store, OCR, speech
   jobx    Async job processing (Redis-backed dispatcher)
   notifx  Email notifications (AWS SES)
   iam     Identity & Access Management
@@ -39,17 +41,17 @@ Use --quick for a lightweight project without IAM or migrations:
 
 Examples:
   manifesto init myapp --module github.com/me/myapp
-  manifesto init myapp --module github.com/me/myapp --with jobx,iam
+  manifesto init myapp --module github.com/me/myapp --with fsx,jobx,iam
   manifesto init myapp --module github.com/me/myapp --all
   manifesto init myapp --module github.com/me/myapp --quick
-  manifesto init myapp --module github.com/me/myapp --quick --with jobx`,
+  manifesto init myapp --module github.com/me/myapp --quick --with fsx,jobx`,
 	Args: cobra.ExactArgs(1),
 	RunE: runInit,
 }
 
 func init() {
 	initCmd.Flags().StringVar(&initGoModule, "module", "", "Go module path (e.g. github.com/user/project)")
-	initCmd.Flags().StringSliceVar(&initModules, "with", nil, "Wireable modules to include (comma-separated: jobx,notifx,iam)")
+	initCmd.Flags().StringSliceVar(&initModules, "with", nil, "Modules to include (comma-separated: fsx,asyncx,ai,jobx,notifx,iam)")
 	initCmd.Flags().StringVar(&initRef, "ref", "", "Manifesto version (tag or branch, default: latest)")
 	initCmd.Flags().BoolVar(&initAll, "all", false, "Wire all available modules")
 	initCmd.Flags().BoolVar(&initQuick, "quick", false, "Create a lightweight project (no IAM, no migrations)")

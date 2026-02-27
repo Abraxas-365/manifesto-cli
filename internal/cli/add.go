@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/Abraxas-365/manifesto-cli/internal/config"
+	"github.com/Abraxas-365/manifesto-cli/internal/remote"
 	"github.com/Abraxas-365/manifesto-cli/internal/scaffold"
 	"github.com/Abraxas-365/manifesto-cli/internal/ui"
 	"github.com/spf13/cobra"
@@ -13,9 +14,12 @@ import (
 var addCmd = &cobra.Command{
 	Use:   "add <module-or-domain-path>",
 	Short: "Wire a module or scaffold a DDD domain package",
-	Long: `Wire a module into the project or scaffold a full domain package.
+	Long: `Add a module to the project or scaffold a full domain package.
 
-Module wiring (adds imports, fields, init code to container/server):
+Module wiring (downloads source + injects into container/server):
+  manifesto add fsx
+  manifesto add asyncx
+  manifesto add ai
   manifesto add jobx
   manifesto add notifx
   manifesto add iam
@@ -47,7 +51,7 @@ func runAdd(cmd *cobra.Command, args []string) error {
 
 	// Domain scaffolding (existing behavior) — paths contain /
 	if !strings.Contains(arg, "/") {
-		return fmt.Errorf("unknown module '%s'. Use a wireable module (jobx, notifx, iam) or a domain path (pkg/mymodule/entity)", arg)
+		return fmt.Errorf("unknown module '%s'. Use a module (fsx, asyncx, ai, jobx, notifx, iam) or a domain path (pkg/mymodule/entity)", arg)
 	}
 
 	return runAddDomain(projectRoot, manifest, arg)
@@ -60,7 +64,32 @@ func runWireModule(projectRoot string, manifest *config.Manifest, moduleName str
 		return nil
 	}
 
+	spec := config.WireableModuleRegistry[moduleName]
+
 	fmt.Println()
+
+	// Download required source modules if not already present.
+	if len(spec.RequiredModules) > 0 {
+		spin := ui.NewSpinner(fmt.Sprintf("Downloading %s...", moduleName))
+		spin.Start()
+
+		client := remote.NewClient("")
+		ref := manifest.Project.Version
+		if ref == "" {
+			var err error
+			ref, err = client.GetLatestVersion()
+			if err != nil || ref == "" {
+				ref = remote.DefaultRef
+			}
+		}
+
+		if err := scaffold.EnsureModulesPresent(projectRoot, manifest, spec.RequiredModules, client, ref); err != nil {
+			spin.Stop(false)
+			return fmt.Errorf("download %s: %w", moduleName, err)
+		}
+		spin.Stop(true)
+	}
+
 	spin := ui.NewSpinner(fmt.Sprintf("Wiring %s...", moduleName))
 	spin.Start()
 

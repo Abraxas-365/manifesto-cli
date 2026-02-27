@@ -30,6 +30,9 @@ type WireableModule struct {
 	// External Go dependencies to install
 	GoDeps []string
 
+	// Required source modules (from ModuleRegistry) that must be downloaded
+	RequiredModules []string
+
 	// Cross-module bridges
 	Bridges []Bridge
 }
@@ -43,9 +46,92 @@ type Bridge struct {
 
 // WireableModuleRegistry defines all modules that can be wired into a project.
 var WireableModuleRegistry = map[string]WireableModule{
+	"fsx": {
+		Name:        "fsx",
+		Description: "File system abstraction (local, S3)",
+
+		RequiredModules: []string{"fsx"},
+
+		ContainerImports: `	"{{GOMODULE}}/pkg/fsx"
+	"{{GOMODULE}}/pkg/fsx/fsxlocal"
+	"{{GOMODULE}}/pkg/fsx/fsxs3"
+	awsConfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"`,
+
+		ContainerFields: `	FileSystem fsx.FileSystem
+	S3Client   *s3.Client`,
+
+		ModuleInit: `	c.initFileStorage()`,
+
+		ContainerHelpers: `func (c *Container) initFileStorage() {
+	storageMode := getEnv("STORAGE_MODE", "local")
+
+	switch storageMode {
+	case "s3":
+		awsRegion := getEnv("AWS_REGION", "us-east-1")
+		awsBucket := getEnv("AWS_BUCKET", "{{PROJECTNAME}}-uploads")
+
+		cfg, err := awsConfig.LoadDefaultConfig(context.TODO(), awsConfig.WithRegion(awsRegion))
+		if err != nil {
+			logx.Fatalf("Unable to load AWS SDK config: %v", err)
+		}
+		c.S3Client = s3.NewFromConfig(cfg)
+		c.FileSystem = fsxs3.NewS3FileSystem(c.S3Client, awsBucket, "")
+		logx.Infof("  S3 file system configured (bucket: %s, region: %s)", awsBucket, awsRegion)
+
+	case "local":
+		uploadDir := getEnv("UPLOAD_DIR", "./uploads")
+		localFS, err := fsxlocal.NewLocalFileSystem(uploadDir)
+		if err != nil {
+			logx.Fatalf("Failed to initialize local file system: %v", err)
+		}
+		c.FileSystem = localFS
+		logx.Infof("  Local file system configured (path: %s)", localFS.GetBasePath())
+
+	default:
+		logx.Fatalf("Unknown STORAGE_MODE: %s (use 'local' or 's3')", storageMode)
+	}
+}`,
+
+		MakefileEnv: `# ============================================================================
+# Environment Variables - Storage Configuration
+# ============================================================================
+
+export STORAGE_MODE = local
+export UPLOAD_DIR = ./uploads
+export AWS_REGION = us-east-1
+export AWS_BUCKET = {{PROJECTNAME}}-uploads`,
+
+		MakefileEnvDisplay: `@echo "Storage:"
+@echo "  MODE:              $(STORAGE_MODE)"
+@echo "  UPLOAD_DIR:        $(UPLOAD_DIR)"
+@echo ""`,
+
+		GoDeps: []string{
+			"github.com/aws/aws-sdk-go-v2/config",
+			"github.com/aws/aws-sdk-go-v2/service/s3",
+		},
+	},
+
+	"asyncx": {
+		Name:        "asyncx",
+		Description: "Async primitives: futures, fan-out, pools, retry, timeout",
+
+		RequiredModules: []string{"asyncx"},
+	},
+
+	"ai": {
+		Name:        "ai",
+		Description: "LLM, embeddings, vector store, OCR, speech",
+
+		RequiredModules: []string{"ai", "fsx"},
+	},
+
 	"jobx": {
 		Name:        "jobx",
 		Description: "Async job processing with Redis-backed dispatcher",
+
+		RequiredModules: []string{"jobx", "asyncx"},
 
 		ContainerImports: `	"{{GOMODULE}}/pkg/asyncx"`,
 		ContainerFields:  `	Dispatcher *asyncx.Dispatcher`,
@@ -64,6 +150,8 @@ var WireableModuleRegistry = map[string]WireableModule{
 	"notifx": {
 		Name:        "notifx",
 		Description: "Email notifications via AWS SES",
+
+		RequiredModules: []string{"notifx"},
 
 		ConfigFields: `	Email EmailConfig`,
 		ConfigLoads:  `	cfg.Email = loadEmailConfig()`,
@@ -111,6 +199,8 @@ export AWS_SES_REGION = us-east-1`,
 	"iam": {
 		Name:        "iam",
 		Description: "Auth, users, tenants, scopes, API keys",
+
+		RequiredModules: []string{"iam", "migrations"},
 
 		ConfigFields: `	JWT           JWTConfig
 	Session       SessionConfig

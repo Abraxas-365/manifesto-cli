@@ -57,7 +57,7 @@ var ModuleRegistry = map[string]Module{
 	},
 	"asyncx": {
 		Name: "asyncx", Description: "Async primitives: futures, fan-out, pools, retry, timeout",
-		Paths: []string{"pkg/asyncx"}, Core: true,
+		Paths: []string{"pkg/asyncx"}, Core: false,
 	},
 	"config": {
 		Name: "config", Description: "Environment-driven configuration",
@@ -69,48 +69,38 @@ var ModuleRegistry = map[string]Module{
 	},
 	"migrations": {
 		Name: "migrations", Description: "Database migration scaffolding",
-		Paths: []string{"migrations"}, Core: true,
+		Paths: []string{"migrations"}, Core: false,
 	},
 	"iam": {
 		Name: "iam", Description: "Auth, users, tenants, scopes, API keys",
-		Paths: []string{"pkg/iam"}, Core: true,
+		Paths: []string{"pkg/iam"}, Core: false,
 	},
 	"fsx": {
 		Name: "fsx", Description: "File system abstraction (local, S3)",
-		Paths: []string{"pkg/fsx"}, Core: true,
+		Paths: []string{"pkg/fsx"}, Core: false,
 	},
 	"ai": {
 		Name: "ai", Description: "LLM, embeddings, vector store, OCR, speech",
-		Paths: []string{"pkg/ai"}, Core: true,
+		Paths: []string{"pkg/ai"}, Core: false, Deps: []string{"fsx"},
 	},
 	"jobx": {
 		Name: "jobx", Description: "Async job queue (Redis-backed dispatcher)",
-		Paths: []string{"pkg/jobx"}, Core: true,
+		Paths: []string{"pkg/jobx"}, Core: false, Deps: []string{"asyncx"},
 	},
 	"notifx": {
 		Name: "notifx", Description: "Email notifications (AWS SES)",
-		Paths: []string{"pkg/notifx"}, Core: true,
+		Paths: []string{"pkg/notifx"}, Core: false,
 	},
 }
 
 // QuickProjectRef is the default Git ref for quick projects.
 const QuickProjectRef = "quick-project"
 
-// quickExcluded are modules excluded from quick projects.
-var quickExcluded = map[string]bool{
-	"iam":        true,
-	"migrations": true,
-}
-
-// CoreModules returns all modules to download.
-// For quick mode, iam and migrations are excluded.
+// CoreModules returns all Core modules to download during init.
 func CoreModules(quick bool) []string {
 	var core []string
 	for name, mod := range ModuleRegistry {
 		if mod.Core {
-			if quick && quickExcluded[name] {
-				continue
-			}
 			core = append(core, name)
 		}
 	}

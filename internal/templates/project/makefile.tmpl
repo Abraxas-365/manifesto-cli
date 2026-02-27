@@ -37,15 +37,6 @@ export REDIS_PORT = 6379
 export REDIS_PASSWORD =
 export REDIS_DB = 0
 
-# ============================================================================
-# Environment Variables - Storage Configuration
-# ============================================================================
-
-export STORAGE_MODE = local
-export UPLOAD_DIR = ./uploads
-export AWS_REGION = us-east-1
-export AWS_BUCKET = {{ .ProjectName }}-uploads
-
 # manifesto:env-config
 
 # ============================================================================
@@ -402,12 +393,6 @@ clean-all: clean ## Clean everything including Docker images
 	docker compose down --rmi all --volumes --remove-orphans
 	@echo "✅ Full cleanup complete"
 
-.PHONY: clean-uploads
-clean-uploads: ## Remove uploaded files
-	@echo "🧹 Cleaning uploads..."
-	rm -rf $(UPLOAD_DIR)/*
-	@echo "✅ Uploads cleaned"
-
 # ============================================================================
 # Utility & Info
 # ============================================================================
@@ -435,10 +420,6 @@ env: ## Show current environment variables
 	@echo "  HOST:              $(REDIS_HOST)"
 	@echo "  PORT:              $(REDIS_PORT)"
 	@echo "  DB:                $(REDIS_DB)"
-	@echo ""
-	@echo "Storage:"
-	@echo "  MODE:              $(STORAGE_MODE)"
-	@echo "  UPLOAD_DIR:        $(UPLOAD_DIR)"
 	@echo ""
 	# manifesto:env-display
 	@echo "Connection:"

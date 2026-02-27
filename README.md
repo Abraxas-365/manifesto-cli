@@ -18,15 +18,14 @@ Running `manifesto init` generates a complete, compilable Go project with:
 
 - **Fiber HTTP server** with structured error handling, CORS, request IDs, and graceful shutdown
 - **Dependency injection container** wired and ready
-- **PostgreSQL + Redis** setup with connection pooling and migration scaffolding
-- **File storage** abstraction (local disk or S3, swappable via env var)
+- **PostgreSQL + Redis** setup with connection pooling
 - **Docker Compose** and a full **Makefile** with 40+ commands (dev, build, test, migrate, backup, etc.)
 - **Structured logging** with colored console output and JSON formatters
 - **Rich error handling** via `errx` — typed errors with HTTP status codes, error registries, and context
 
-All library code lives in `pkg/` and is always present. Modules like IAM, job processing, and notifications are **dormant until wired** — no conditional templates, no code bloat.
+Core libraries are always present. Everything else — file storage, async jobs, IAM, AI — is added on demand via `manifesto add`.
 
-## Libraries (always present)
+## Core Libraries
 
 | Library | What it provides |
 |---------|-----------------|
@@ -34,20 +33,22 @@ All library code lives in `pkg/` and is always present. Modules like IAM, job pr
 | `errx` | Structured errors with HTTP status mapping and registries |
 | `logx` | Colored console logging, JSON formatters, structured fields |
 | `ptrx` | Pointer utility helpers |
-| `asyncx` | Futures, fan-out, pools, retry, timeout patterns |
 | `config` | Environment-driven configuration with defaults |
-| `fsx` | File system abstraction — local disk or S3 |
-| `ai` | LLM clients, embeddings, vector store, OCR, speech |
 
-## Wireable Modules
+## Modules
 
-Modules are wired into your project's container, config, and server via code injection at marker points. Wire them during init or add them later:
+Modules are downloaded and wired into your project's container, config, server, and Makefile via code injection at marker points. Add them during init or later with `manifesto add`:
 
-| Module | What it wires |
-|--------|--------------|
-| `jobx` | Async job queue — Redis-backed dispatcher in container, background service startup |
-| `notifx` | Email notifications — SES notifier in container, email config |
-| `iam` | Full auth system — OAuth, passwordless OTP, JWT, API keys, RBAC, multi-tenant users, sessions, invitation-only registration |
+| Module | What it provides |
+|--------|-----------------|
+| `fsx` | File system abstraction — local disk or S3 with storage config |
+| `asyncx` | Futures, fan-out, pools, retry, timeout patterns |
+| `ai` | LLM clients, embeddings, vector store, OCR, speech (requires fsx) |
+| `jobx` | Async job queue — Redis-backed dispatcher (requires asyncx) |
+| `notifx` | Email notifications — SES notifier with email config |
+| `iam` | Full auth system — OAuth, passwordless OTP, JWT, API keys, RBAC, multi-tenant users, sessions, invitations |
+
+**Dependencies are resolved automatically:** `manifesto add jobx` downloads both `asyncx` and `jobx`. `manifesto add ai` downloads both `fsx` and `ai`.
 
 **Cross-module bridges:** when both `jobx` and `notifx` are wired, the `notifx:send_email` async handler is automatically registered with the dispatcher.
 
@@ -60,7 +61,7 @@ Modules are wired into your project's container, config, and server via code inj
 manifesto init myapp --module github.com/me/myapp
 
 # Wire specific modules during init
-manifesto init myapp --module github.com/me/myapp --with jobx,iam
+manifesto init myapp --module github.com/me/myapp --with fsx,jobx,iam
 
 # Wire everything
 manifesto init myapp --module github.com/me/myapp --all
@@ -73,22 +74,23 @@ Use `--quick` for a lightweight project without IAM or migrations:
 ```bash
 manifesto init myapp --module github.com/me/myapp --quick
 
-# Quick + wire jobx
-manifesto init myapp --module github.com/me/myapp --quick --with jobx
+# Quick + wire fsx and jobx
+manifesto init myapp --module github.com/me/myapp --quick --with fsx,jobx
 ```
 
-Quick projects pull from the [`quick-project`](https://github.com/Abraxas-365/manifesto/tree/quick-project) branch and exclude IAM and migrations from the download.
+Quick projects pull from the [`quick-project`](https://github.com/Abraxas-365/manifesto/tree/quick-project) branch and exclude IAM from the available modules.
 
-### Wire a module
+### Add a module
 
 ```bash
 cd myapp
-manifesto add jobx      # Wires jobx into container + config
+manifesto add fsx       # Downloads fsx + wires file storage into container
+manifesto add jobx      # Downloads asyncx + jobx, wires dispatcher
 manifesto add notifx    # Wires notifx + detects jobx → injects bridge
-manifesto add iam       # Wires iam into container + server + config
+manifesto add iam       # Downloads iam + migrations, wires into container + server + config
 ```
 
-Wiring is idempotent — running `manifesto add jobx` twice is a no-op.
+Adding is idempotent — running `manifesto add jobx` twice is a no-op.
 
 ### Add a domain package
 
@@ -122,17 +124,17 @@ manifesto modules
 ```
 
 ```
-  Libraries (always present)
+  Core Libraries
 
     ● kernel       Domain primitives, value objects, pagination
     ● errx         Structured error handling with HTTP mapping
     ● logx         Structured logging (console/JSON)
     ● config       Environment-driven configuration
-    ● fsx          File system abstraction (local, S3)
     ...
 
   Wireable Modules
 
+    ● wired    fsx       File system abstraction (local, S3)
     ● wired    jobx      Async job queue (Redis-backed dispatcher)
     ○ not wired notifx   Email notifications (AWS SES)
     ○ not wired iam      Auth, users, tenants, scopes, API keys
@@ -140,7 +142,13 @@ manifesto modules
 
 ## How Wiring Works
 
-All module code lives in `pkg/` from day one. Wiring injects references into your project files at marker comments:
+When you run `manifesto add <module>`, the CLI:
+
+1. **Downloads** the module's source code from GitHub (if not already present)
+2. **Resolves dependencies** — `jobx` auto-downloads `asyncx`, `ai` auto-downloads `fsx`
+3. **Injects code** into your project files at marker comments
+4. **Installs Go dependencies** (e.g., AWS SDK for fsx/notifx)
+5. **Updates manifesto.yaml** to track wired modules
 
 | File | Marker | Purpose |
 |------|--------|---------|
@@ -154,6 +162,8 @@ All module code lives in `pkg/` from day one. Wiring injects references into you
 | `cmd/server.go` | `// manifesto:server-imports` | Import lines |
 | `cmd/server.go` | `// manifesto:public-routes` | Public routes (OAuth) |
 | `cmd/server.go` | `// manifesto:route-registration` | Protected routes |
+| `Makefile` | `# manifesto:env-config` | Environment variables |
+| `Makefile` | `# manifesto:env-display` | `make env` display lines |
 
 The same marker system is used by `manifesto add <domain-path>` to inject domain containers and routes.
 
@@ -169,17 +179,23 @@ myapp/
 │   ├── errx/               # Structured errors with HTTP mapping
 │   ├── logx/               # Logging framework
 │   ├── config/             # Env-driven config loading
-│   ├── ptrx/               # Pointer utilities
-│   ├── asyncx/             # Async primitives
-│   ├── fsx/                # File system abstraction
-│   ├── ai/                 # AI/LLM toolkit
-│   ├── jobx/               # Job queue (dormant until wired)
-│   ├── notifx/             # Notifications (dormant until wired)
-│   └── iam/                # IAM (dormant until wired)
-├── migrations/             # SQL migration files
+│   └── ptrx/               # Pointer utilities
 ├── docker-compose.yml      # Postgres + Redis
 ├── Makefile                # 40+ commands, all env vars
 └── manifesto.yaml          # Project manifest (tracks wired modules)
+```
+
+After wiring modules, additional directories appear in `pkg/`:
+
+```
+├── pkg/
+│   ├── fsx/                # File system abstraction (after: manifesto add fsx)
+│   ├── asyncx/             # Async primitives (after: manifesto add asyncx)
+│   ├── ai/                 # AI/LLM toolkit (after: manifesto add ai)
+│   ├── jobx/               # Job queue (after: manifesto add jobx)
+│   ├── notifx/             # Notifications (after: manifesto add notifx)
+│   └── iam/                # IAM (after: manifesto add iam)
+├── migrations/             # SQL migrations (after: manifesto add iam)
 ```
 
 ## Architecture
@@ -209,9 +225,9 @@ For the full architecture guide, patterns, and rationale, see the [Manifesto Arc
 | Command | Description |
 |---------|-------------|
 | `manifesto init <name> --module <go-module>` | Create a new project |
-| `manifesto add <module>` | Wire a module (jobx, notifx, iam) |
+| `manifesto add <module>` | Add a module (fsx, asyncx, ai, jobx, notifx, iam) |
 | `manifesto add <path>` | Add a DDD domain package |
-| `manifesto modules` | List all libraries and wireable modules |
+| `manifesto modules` | List all libraries and modules |
 | `manifesto version` | Show CLI version |
 
 ### Flags

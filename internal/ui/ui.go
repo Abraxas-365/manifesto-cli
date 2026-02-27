@@ -200,7 +200,7 @@ type WireableModuleDisplay struct {
 
 func PrintModulesWithSections(libraries []ModuleDisplay, wireables []WireableModuleDisplay) {
 	fmt.Println()
-	Bold.Println("  Libraries (always present)")
+	Bold.Println("  Core Libraries")
 	fmt.Println()
 
 	for _, m := range libraries {
