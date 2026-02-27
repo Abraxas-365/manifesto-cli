@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"{{ .GoModule }}/{{ .DomainPath }}"
-	"{{ .GoModule }}/pkg/errx"
 	"{{ .GoModule }}/pkg/kernel"
 	"github.com/google/uuid"
 )
@@ -23,11 +22,7 @@ func New{{ .EntityName }}Service(
 }
 
 func (s *{{ .EntityName }}Service) GetByID(ctx context.Context, id kernel.{{ .EntityName }}ID) (*{{ .PackageName }}.{{ .EntityName }}, error) {
-	entity, err := s.repo.GetByID(ctx, id)
-	if err != nil {
-		return nil, {{ .PackageName }}.Err{{ .EntityName }}NotFound()
-	}
-	return entity, nil
+	return s.repo.GetByID(ctx, id)
 }
 
 func (s *{{ .EntityName }}Service) List(ctx context.Context, tenantID kernel.TenantID, opts kernel.PaginationOptions) (kernel.Paginated[{{ .PackageName }}.{{ .EntityName }}], error) {
@@ -44,15 +39,12 @@ func (s *{{ .EntityName }}Service) Create(ctx context.Context, req {{ .PackageNa
 	}
 
 	if err := s.repo.Create(ctx, entity); err != nil {
-		return nil, errx.Wrap(err, "failed to create {{ .PackageName }}", errx.TypeInternal)
+		return nil, err
 	}
 
 	return entity, nil
 }
 
 func (s *{{ .EntityName }}Service) Delete(ctx context.Context, id kernel.{{ .EntityName }}ID) error {
-	if _, err := s.repo.GetByID(ctx, id); err != nil {
-		return {{ .PackageName }}.Err{{ .EntityName }}NotFound()
-	}
 	return s.repo.Delete(ctx, id)
 }
