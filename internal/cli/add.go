@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/Abraxas-365/manifesto-cli/internal/config"
 	"github.com/Abraxas-365/manifesto-cli/internal/remote"
@@ -49,11 +48,7 @@ func runAdd(cmd *cobra.Command, args []string) error {
 		return runWireModule(projectRoot, manifest, arg)
 	}
 
-	// Domain scaffolding (existing behavior) — paths contain /
-	if !strings.Contains(arg, "/") {
-		return fmt.Errorf("unknown module '%s'. Use a module (fsx, asyncx, ai, jobx, notifx, iam) or a domain path (pkg/mymodule/entity)", arg)
-	}
-
+	// Domain scaffolding — anything that's not a wireable module
 	return runAddDomain(projectRoot, manifest, arg)
 }
 
