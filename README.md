@@ -18,57 +18,81 @@ Running `manifesto init` generates a complete, compilable Go project with:
 
 - **Fiber HTTP server** with structured error handling, CORS, request IDs, and graceful shutdown
 - **Dependency injection container** wired and ready
-- **PostgreSQL** setup with sqlx, connection pooling, and migration scaffolding
+- **PostgreSQL + Redis** setup with connection pooling and migration scaffolding
+- **File storage** abstraction (local disk or S3, swappable via env var)
 - **Docker Compose** and a full **Makefile** with 40+ commands (dev, build, test, migrate, backup, etc.)
 - **Structured logging** with colored console output and JSON formatters
 - **Rich error handling** via `errx` — typed errors with HTTP status codes, error registries, and context
 
-Add modules for more:
+All library code lives in `pkg/` and is always present. Modules like IAM, job processing, and notifications are **dormant until wired** — no conditional templates, no code bloat.
 
-| Module | What it adds |
-|--------|-------------|
-| `iam` | OAuth (Google/Microsoft), passwordless OTP, JWT, API keys, RBAC scopes, multi-tenant users, invitations, Redis sessions |
-| `fsx` | File system abstraction — swap between local disk and S3 with one env var |
-| `ai` | LLM clients, embeddings, vector store, OCR, speech-to-text |
+## Libraries (always present)
 
-Everything is **conditional**. No IAM? No Redis in your docker-compose, no auth middleware in your server, no OAuth env vars in your Makefile.
+| Library | What it provides |
+|---------|-----------------|
+| `kernel` | Domain primitives, typed IDs, pagination, auth context |
+| `errx` | Structured errors with HTTP status mapping and registries |
+| `logx` | Colored console logging, JSON formatters, structured fields |
+| `ptrx` | Pointer utility helpers |
+| `asyncx` | Futures, fan-out, pools, retry, timeout patterns |
+| `config` | Environment-driven configuration with defaults |
+| `fsx` | File system abstraction — local disk or S3 |
+| `ai` | LLM clients, embeddings, vector store, OCR, speech |
+
+## Wireable Modules
+
+Modules are wired into your project's container, config, and server via code injection at marker points. Wire them during init or add them later:
+
+| Module | What it wires |
+|--------|--------------|
+| `jobx` | Async job queue — Redis-backed dispatcher in container, background service startup |
+| `notifx` | Email notifications — SES notifier in container, email config |
+| `iam` | Full auth system — OAuth, passwordless OTP, JWT, API keys, RBAC, multi-tenant users, sessions, invitation-only registration |
+
+**Cross-module bridges:** when both `jobx` and `notifx` are wired, the `notifx:send_email` async handler is automatically registered with the dispatcher.
 
 ## Usage
 
 ### Create a new project
 
 ```bash
-# Interactive — core modules only
+# Interactive — prompts which modules to wire
 manifesto init myapp --module github.com/me/myapp
 
-# With specific modules
-manifesto init myapp --module github.com/me/myapp --with iam,fsx
+# Wire specific modules during init
+manifesto init myapp --module github.com/me/myapp --with jobx,iam
 
-# Everything
+# Wire everything
 manifesto init myapp --module github.com/me/myapp --all
 ```
 
 ### Create a quick project
 
-Use `--quick` for a lightweight project without IAM or migrations. You still get the same interactive selection for optional modules (`fsx`, `asyncx`, `ai`).
+Use `--quick` for a lightweight project without IAM or migrations:
 
 ```bash
-# Interactive — pick optional modules
 manifesto init myapp --module github.com/me/myapp --quick
 
-# With specific modules
-manifesto init myapp --module github.com/me/myapp --quick --with fsx,asyncx
-
-# All optional modules
-manifesto init myapp --module github.com/me/myapp --quick --all
+# Quick + wire jobx
+manifesto init myapp --module github.com/me/myapp --quick --with jobx
 ```
 
-Quick projects include a smaller set of core modules (`kernel`, `errx`, `logx`, `ptrx`, `config`, `server`) and pull from the [`quick-project`](https://github.com/Abraxas-365/manifesto/tree/quick-project) branch.
+Quick projects pull from the [`quick-project`](https://github.com/Abraxas-365/manifesto/tree/quick-project) branch and exclude IAM and migrations from the download.
+
+### Wire a module
+
+```bash
+cd myapp
+manifesto add jobx      # Wires jobx into container + config
+manifesto add notifx    # Wires notifx + detects jobx → injects bridge
+manifesto add iam       # Wires iam into container + server + config
+```
+
+Wiring is idempotent — running `manifesto add jobx` twice is a no-op.
 
 ### Add a domain package
 
 ```bash
-cd myapp
 manifesto add pkg/recruitment/candidate
 ```
 
@@ -83,42 +107,55 @@ pkg/recruitment/candidate/
 │   └── service.go            # Business logic layer
 ├── candidateinfra/
 │   └── postgres.go           # PostgreSQL repository
-└── candidateapi/
-    └── handler.go            # Fiber HTTP handlers
+├── candidateapi/
+│   └── handler.go            # Fiber HTTP handlers
+└── candidatecontainer/
+    └── container.go          # Module DI wiring
 ```
 
-Plus a typed ID appended to `pkg/kernel/ids.go`:
+Plus a typed ID appended to `pkg/kernel/ids.go` and automatic injection into `cmd/container.go` and `cmd/server.go`.
 
-```go
-type CandidateID string
-func NewCandidateID(id string) CandidateID { return CandidateID(id) }
-func (id CandidateID) String() string      { return string(id) }
-func (id CandidateID) IsEmpty() bool       { return string(id) == "" }
-```
-
-### Install a module later
-
-```bash
-manifesto install ai    # Also installs fsx (dependency)
-```
-
-### List available modules
+### List modules
 
 ```bash
 manifesto modules
 ```
 
 ```
-  ● kernel       Domain primitives, value objects, pagination
-  ● errx         Structured error handling with HTTP mapping
-  ● logx         Structured logging (console/JSON)
-  ● config       Environment-driven configuration
-  ○ iam          Auth, users, tenants, scopes, API keys
-  ○ fsx          File system abstraction (local, S3)
-  ○ ai           LLM, embeddings, vector store, OCR, speech
+  Libraries (always present)
 
-  ● installed  ○ available
+    ● kernel       Domain primitives, value objects, pagination
+    ● errx         Structured error handling with HTTP mapping
+    ● logx         Structured logging (console/JSON)
+    ● config       Environment-driven configuration
+    ● fsx          File system abstraction (local, S3)
+    ...
+
+  Wireable Modules
+
+    ● wired    jobx      Async job queue (Redis-backed dispatcher)
+    ○ not wired notifx   Email notifications (AWS SES)
+    ○ not wired iam      Auth, users, tenants, scopes, API keys
 ```
+
+## How Wiring Works
+
+All module code lives in `pkg/` from day one. Wiring injects references into your project files at marker comments:
+
+| File | Marker | Purpose |
+|------|--------|---------|
+| `pkg/config/config.go` | `// manifesto:config-fields` | Config struct fields |
+| `pkg/config/config.go` | `// manifesto:config-loads` | Load() assignments |
+| `cmd/container.go` | `// manifesto:container-imports` | Import lines |
+| `cmd/container.go` | `// manifesto:container-fields` | Struct fields |
+| `cmd/container.go` | `// manifesto:module-init` | initModules() code |
+| `cmd/container.go` | `// manifesto:background-start` | Background services |
+| `cmd/container.go` | `// manifesto:container-helpers` | Top-level functions |
+| `cmd/server.go` | `// manifesto:server-imports` | Import lines |
+| `cmd/server.go` | `// manifesto:public-routes` | Public routes (OAuth) |
+| `cmd/server.go` | `// manifesto:route-registration` | Protected routes |
+
+The same marker system is used by `manifesto add <domain-path>` to inject domain containers and routes.
 
 ## Generated Project Structure
 
@@ -133,19 +170,16 @@ myapp/
 │   ├── logx/               # Logging framework
 │   ├── config/             # Env-driven config loading
 │   ├── ptrx/               # Pointer utilities
-│   ├── iam/                # (if installed) Full IAM module
-│   │   ├── auth/           #   OAuth, JWT, middleware, scopes
-│   │   ├── user/           #   User entity + repo + service
-│   │   ├── tenant/         #   Multi-tenant management
-│   │   ├── apikey/         #   API key management
-│   │   ├── invitation/     #   Invitation-only registration
-│   │   └── otp/            #   Passwordless OTP auth
-│   ├── fsx/                # (if installed) File system abstraction
-│   └── ai/                 # (if installed) AI/LLM toolkit
+│   ├── asyncx/             # Async primitives
+│   ├── fsx/                # File system abstraction
+│   ├── ai/                 # AI/LLM toolkit
+│   ├── jobx/               # Job queue (dormant until wired)
+│   ├── notifx/             # Notifications (dormant until wired)
+│   └── iam/                # IAM (dormant until wired)
 ├── migrations/             # SQL migration files
-├── docker-compose.yml      # Postgres + Redis (if IAM)
+├── docker-compose.yml      # Postgres + Redis
 ├── Makefile                # 40+ commands, all env vars
-└── manifesto.yaml          # Project manifest
+└── manifesto.yaml          # Project manifest (tracks wired modules)
 ```
 
 ## Architecture
@@ -170,44 +204,24 @@ Manifesto follows a strict layered DDD architecture. Each domain is self-contain
 
 For the full architecture guide, patterns, and rationale, see the [Manifesto Architecture Document](https://github.com/Abraxas-365/manifesto).
 
-## Module Details
-
-### Core (always included)
-
-**kernel** — Shared domain primitives: typed IDs (`UserID`, `TenantID`), `Paginated[T]` generic container, `PaginationOptions`, `AuthContext`.
-
-**errx** — Error registries per module, typed errors (`TypeValidation`, `TypeBusiness`, `TypeInternal`), automatic HTTP status mapping, `WithDetail()` for context, `Wrap()` for chains.
-
-**logx** — Rust-inspired colored console logging, JSON/CloudWatch formatters, structured fields, level-based filtering.
-
-**config** — Environment-driven configuration with defaults, validation on startup, `IsDevelopment()` helpers.
-
-### Optional
-
-**iam** — Complete identity and access management: OAuth 2.0 (Google, Microsoft), passwordless OTP, JWT access/refresh tokens, API key management with live/test modes, scope-based RBAC with wildcard matching, multi-tenant isolation, invitation-only registration, session management with background cleanup.
-
-**fsx** — File system abstraction with `fsx.FileSystem` interface, local disk and S3 implementations, swap via `STORAGE_MODE` env var.
-
-**ai** — LLM client abstraction, embeddings, vector store integration, OCR, speech-to-text. Requires `fsx`.
-
 ## Commands
 
 | Command | Description |
 |---------|-------------|
 | `manifesto init <name> --module <go-module>` | Create a new project |
+| `manifesto add <module>` | Wire a module (jobx, notifx, iam) |
 | `manifesto add <path>` | Add a DDD domain package |
-| `manifesto install <module>` | Install a module (with deps) |
-| `manifesto modules` | List all modules and status |
+| `manifesto modules` | List all libraries and wireable modules |
 | `manifesto version` | Show CLI version |
 
 ### Flags
 
 | Flag | Used with | Description |
 |------|-----------|-------------|
-| `--with <modules>` | `init` | Comma-separated optional modules |
-| `--all` | `init` | Install all modules |
+| `--with <modules>` | `init` | Comma-separated modules to wire |
+| `--all` | `init` | Wire all available modules |
 | `--quick` | `init` | Lightweight project (no IAM, no migrations) |
-| `--ref <version>` | `init`, `install` | Pin manifesto version (default: latest) |
+| `--ref <version>` | `init` | Pin manifesto version (default: latest) |
 
 ## Generated Makefile Commands
 
@@ -230,7 +244,7 @@ make db-reset         # Clean + migrate + seed
 make db-backup        # Backup to file
 
 make psql             # Open psql shell
-make redis-cli        # Open Redis CLI (if IAM)
+make redis-cli        # Open Redis CLI
 make env              # Show all config
 ```
 

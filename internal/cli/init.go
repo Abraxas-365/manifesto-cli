@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/Abraxas-365/manifesto-cli/internal/config"
@@ -25,32 +26,32 @@ var initCmd = &cobra.Command{
 	Short: "Create a new Manifesto app",
 	Long: `Create a new Go project with the Manifesto architecture.
 
-Core modules (always included):
-  kernel, errx, logx, ptrx, config, server, migrations
+All libraries are included by default (kernel, errx, logx, ptrx,
+asyncx, config, fsx, ai, etc).
 
-Optional modules (select during init or install later):
-  iam   Identity & Access Management
-  fsx   File system abstraction (S3, local)
-  ai    AI toolkit (LLM, embeddings, vector store, OCR)
+Wireable modules can be added during init or later with 'manifesto add':
+  jobx    Async job processing (Redis-backed dispatcher)
+  notifx  Email notifications (AWS SES)
+  iam     Identity & Access Management
 
 Use --quick for a lightweight project without IAM or migrations:
   manifesto init myapp --module github.com/me/myapp --quick
 
 Examples:
   manifesto init myapp --module github.com/me/myapp
-  manifesto init myapp --module github.com/me/myapp --with iam,ai
+  manifesto init myapp --module github.com/me/myapp --with jobx,iam
   manifesto init myapp --module github.com/me/myapp --all
   manifesto init myapp --module github.com/me/myapp --quick
-  manifesto init myapp --module github.com/me/myapp --quick --with fsx,asyncx`,
+  manifesto init myapp --module github.com/me/myapp --quick --with jobx`,
 	Args: cobra.ExactArgs(1),
 	RunE: runInit,
 }
 
 func init() {
 	initCmd.Flags().StringVar(&initGoModule, "module", "", "Go module path (e.g. github.com/user/project)")
-	initCmd.Flags().StringSliceVar(&initModules, "with", nil, "Optional modules (comma-separated: iam,ai,fsx)")
+	initCmd.Flags().StringSliceVar(&initModules, "with", nil, "Wireable modules to include (comma-separated: jobx,notifx,iam)")
 	initCmd.Flags().StringVar(&initRef, "ref", "", "Manifesto version (tag or branch, default: latest)")
-	initCmd.Flags().BoolVar(&initAll, "all", false, "Include all optional modules")
+	initCmd.Flags().BoolVar(&initAll, "all", false, "Wire all available modules")
 	initCmd.Flags().BoolVar(&initQuick, "quick", false, "Create a lightweight project (no IAM, no migrations)")
 	_ = initCmd.MarkFlagRequired("module")
 }
@@ -66,59 +67,8 @@ func runInit(cmd *cobra.Command, args []string) error {
 		ui.PrintCreateHeader(projectName, initGoModule)
 	}
 
-	// Build module list.
+	// Build module list (all core modules).
 	selected := config.CoreModules(initQuick)
-
-	if initAll {
-		selected = append(selected, config.OptionalModules(initQuick)...)
-	} else if len(initModules) > 0 {
-		for _, m := range initModules {
-			m = strings.TrimSpace(m)
-			if _, ok := config.ModuleRegistry[m]; !ok {
-				return fmt.Errorf("unknown module: '%s'. Run 'manifesto modules' to see available", m)
-			}
-			if initQuick && !config.IsQuickModule(m) {
-				return fmt.Errorf("module '%s' is not available for quick projects", m)
-			}
-			selected = append(selected, m)
-		}
-	} else {
-		// Interactive selection.
-		optional := config.OptionalModules(initQuick)
-		if len(optional) > 0 {
-			fmt.Println("  Which optional modules would you like to include?")
-			fmt.Println()
-			for _, name := range optional {
-				mod := config.ModuleRegistry[name]
-				fmt.Printf("    %s  %-6s  %s\n", ui.Cyan.Sprint("▸"), ui.Bold.Sprint(name), ui.Dim.Sprint(mod.Description))
-			}
-			fmt.Println()
-			fmt.Print("  Enter modules (comma-separated), 'all', or press Enter to skip: ")
-
-			reader := bufio.NewReader(os.Stdin)
-			input, _ := reader.ReadString('\n')
-			input = strings.TrimSpace(input)
-
-			if input == "all" {
-				selected = append(selected, optional...)
-			} else if input != "" {
-				for _, m := range strings.Split(input, ",") {
-					m = strings.TrimSpace(m)
-					if m == "" {
-						continue
-					}
-					if _, ok := config.ModuleRegistry[m]; !ok {
-						return fmt.Errorf("unknown module: '%s'", m)
-					}
-					if initQuick && !config.IsQuickModule(m) {
-						return fmt.Errorf("module '%s' is not available for quick projects", m)
-					}
-					selected = append(selected, m)
-				}
-			}
-			fmt.Println()
-		}
-	}
 
 	// Deduplicate.
 	seen := make(map[string]bool)
@@ -134,16 +84,87 @@ func runInit(cmd *cobra.Command, args []string) error {
 	resolved := config.ResolveDeps(deduped)
 
 	// Show what will be installed.
-	fmt.Printf("  Installing %s modules:\n\n", ui.Bold.Sprintf("%d", len(resolved)))
+	fmt.Printf("  Installing %s libraries:\n\n", ui.Bold.Sprintf("%d", len(resolved)))
 	for _, name := range resolved {
-		mod := config.ModuleRegistry[name]
-		tag := ""
-		if mod.Core {
-			tag = ui.Dim.Sprint(" core")
-		}
-		fmt.Printf("    %s %s%s\n", ui.Green.Sprint("+"), name, tag)
+		fmt.Printf("    %s %s\n", ui.Green.Sprint("+"), name)
 	}
 	fmt.Println()
+
+	// Determine which modules to wire.
+	var wireModules []string
+
+	wireableNames := config.WireableModuleNames()
+	sort.Strings(wireableNames)
+
+	// Filter wireable modules based on quick mode (iam not available in quick)
+	availableWireable := wireableNames
+	if initQuick {
+		var filtered []string
+		for _, name := range wireableNames {
+			if name != "iam" {
+				filtered = append(filtered, name)
+			}
+		}
+		availableWireable = filtered
+	}
+
+	if initAll {
+		wireModules = availableWireable
+	} else if len(initModules) > 0 {
+		for _, m := range initModules {
+			m = strings.TrimSpace(m)
+			if !config.IsWireableModule(m) {
+				return fmt.Errorf("unknown wireable module: '%s'. Available: %s", m, strings.Join(wireableNames, ", "))
+			}
+			if initQuick && m == "iam" {
+				return fmt.Errorf("module 'iam' is not available for quick projects")
+			}
+			wireModules = append(wireModules, m)
+		}
+	} else {
+		// Interactive selection.
+		if len(availableWireable) > 0 {
+			fmt.Println("  Which modules would you like to wire?")
+			fmt.Println()
+			for _, name := range availableWireable {
+				spec := config.WireableModuleRegistry[name]
+				fmt.Printf("    %s  %-8s  %s\n", ui.Cyan.Sprint("▸"), ui.Bold.Sprint(name), ui.Dim.Sprint(spec.Description))
+			}
+			fmt.Println()
+			fmt.Print("  Enter modules (comma-separated), 'all', or press Enter to skip: ")
+
+			reader := bufio.NewReader(os.Stdin)
+			input, _ := reader.ReadString('\n')
+			input = strings.TrimSpace(input)
+
+			if input == "all" {
+				wireModules = availableWireable
+			} else if input != "" {
+				for _, m := range strings.Split(input, ",") {
+					m = strings.TrimSpace(m)
+					if m == "" {
+						continue
+					}
+					if !config.IsWireableModule(m) {
+						return fmt.Errorf("unknown wireable module: '%s'", m)
+					}
+					if initQuick && m == "iam" {
+						return fmt.Errorf("module 'iam' is not available for quick projects")
+					}
+					wireModules = append(wireModules, m)
+				}
+			}
+			fmt.Println()
+		}
+	}
+
+	if len(wireModules) > 0 {
+		fmt.Printf("  Wiring %s modules:\n\n", ui.Bold.Sprintf("%d", len(wireModules)))
+		for _, name := range wireModules {
+			fmt.Printf("    %s %s\n", ui.Cyan.Sprint("⚡"), name)
+		}
+		fmt.Println()
+	}
 
 	// For quick projects, default to quick-project branch.
 	ref := initRef
@@ -163,6 +184,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		OutputDir:   cwd,
 		Modules:     resolved,
 		Ref:         ref,
+		WireModules: wireModules,
 	}); err != nil {
 		return err
 	}

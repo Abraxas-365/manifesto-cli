@@ -12,10 +12,11 @@ import (
 const ManifestoFile = "manifesto.yaml"
 
 type Manifest struct {
-	Project   ProjectConfig           `yaml:"project"`
-	Modules   map[string]ModuleConfig `yaml:"modules"`
-	CreatedAt time.Time               `yaml:"created_at"`
-	UpdatedAt time.Time               `yaml:"updated_at"`
+	Project      ProjectConfig           `yaml:"project"`
+	Modules      map[string]ModuleConfig `yaml:"modules"`
+	WiredModules []string                `yaml:"wired_modules,omitempty"`
+	CreatedAt    time.Time               `yaml:"created_at"`
+	UpdatedAt    time.Time               `yaml:"updated_at"`
 }
 
 type ProjectConfig struct {
@@ -76,62 +77,44 @@ var ModuleRegistry = map[string]Module{
 	},
 	"fsx": {
 		Name: "fsx", Description: "File system abstraction (local, S3)",
-		Paths: []string{"pkg/fsx"}, Deps: []string{"errx"},
+		Paths: []string{"pkg/fsx"}, Core: true,
 	},
 	"ai": {
 		Name: "ai", Description: "LLM, embeddings, vector store, OCR, speech",
-		Paths: []string{"pkg/ai"}, Deps: []string{"errx", "fsx"},
+		Paths: []string{"pkg/ai"}, Core: true,
+	},
+	"jobx": {
+		Name: "jobx", Description: "Async job queue (Redis-backed dispatcher)",
+		Paths: []string{"pkg/jobx"}, Core: true,
+	},
+	"notifx": {
+		Name: "notifx", Description: "Email notifications (AWS SES)",
+		Paths: []string{"pkg/notifx"}, Core: true,
 	},
 }
 
 // QuickProjectRef is the default Git ref for quick projects.
 const QuickProjectRef = "quick-project"
 
-// quickCoreModules are always included in a quick project.
-var quickCoreModules = []string{"kernel", "errx", "logx", "ptrx", "config", "server"}
+// quickExcluded are modules excluded from quick projects.
+var quickExcluded = map[string]bool{
+	"iam":        true,
+	"migrations": true,
+}
 
-// quickOptionalModules can be selected when creating a quick project.
-var quickOptionalModules = []string{"fsx", "asyncx", "ai"}
-
+// CoreModules returns all modules to download.
+// For quick mode, iam and migrations are excluded.
 func CoreModules(quick bool) []string {
-	if quick {
-		return append([]string{}, quickCoreModules...)
-	}
 	var core []string
 	for name, mod := range ModuleRegistry {
 		if mod.Core {
+			if quick && quickExcluded[name] {
+				continue
+			}
 			core = append(core, name)
 		}
 	}
 	return core
-}
-
-func OptionalModules(quick bool) []string {
-	if quick {
-		return append([]string{}, quickOptionalModules...)
-	}
-	var optional []string
-	for name, mod := range ModuleRegistry {
-		if !mod.Core {
-			optional = append(optional, name)
-		}
-	}
-	return optional
-}
-
-// IsQuickModule returns true if the module is available in quick projects.
-func IsQuickModule(name string) bool {
-	for _, m := range quickCoreModules {
-		if m == name {
-			return true
-		}
-	}
-	for _, m := range quickOptionalModules {
-		if m == name {
-			return true
-		}
-	}
-	return false
 }
 
 func ResolveDeps(names []string) []string {
@@ -161,6 +144,16 @@ func ResolveDeps(names []string) []string {
 func HasModule(modules []string, name string) bool {
 	for _, m := range modules {
 		if m == name {
+			return true
+		}
+	}
+	return false
+}
+
+// IsWired returns true if the given module name is in the manifest's WiredModules list.
+func (m *Manifest) IsWired(name string) bool {
+	for _, wm := range m.WiredModules {
+		if wm == name {
 			return true
 		}
 	}

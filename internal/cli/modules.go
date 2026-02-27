@@ -19,14 +19,17 @@ func runModules(cmd *cobra.Command, args []string) error {
 	projectRoot, _ := findProjectRoot()
 	manifest, _ := config.LoadManifest(projectRoot)
 
-	var names []string
+	// Collect library modules (always present, not wireable)
+	var libraryNames []string
 	for name := range config.ModuleRegistry {
-		names = append(names, name)
+		if !config.IsWireableModule(name) {
+			libraryNames = append(libraryNames, name)
+		}
 	}
-	sort.Strings(names)
+	sort.Strings(libraryNames)
 
-	var modules []ui.ModuleDisplay
-	for _, name := range names {
+	var libraries []ui.ModuleDisplay
+	for _, name := range libraryNames {
 		mod := config.ModuleRegistry[name]
 		installed := false
 		if manifest != nil {
@@ -38,7 +41,7 @@ func runModules(cmd *cobra.Command, args []string) error {
 			deps = strings.Join(mod.Deps, ", ")
 		}
 
-		modules = append(modules, ui.ModuleDisplay{
+		libraries = append(libraries, ui.ModuleDisplay{
 			Name:        name,
 			Description: mod.Description,
 			Installed:   installed,
@@ -47,6 +50,25 @@ func runModules(cmd *cobra.Command, args []string) error {
 		})
 	}
 
-	ui.PrintModules(modules)
+	// Collect wireable modules
+	wireableNames := config.WireableModuleNames()
+	sort.Strings(wireableNames)
+
+	var wireables []ui.WireableModuleDisplay
+	for _, name := range wireableNames {
+		spec := config.WireableModuleRegistry[name]
+		wired := false
+		if manifest != nil {
+			wired = manifest.IsWired(name)
+		}
+
+		wireables = append(wireables, ui.WireableModuleDisplay{
+			Name:        name,
+			Description: spec.Description,
+			Wired:       wired,
+		})
+	}
+
+	ui.PrintModulesWithSections(libraries, wireables)
 	return nil
 }

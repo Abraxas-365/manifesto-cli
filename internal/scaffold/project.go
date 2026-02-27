@@ -18,21 +18,18 @@ import (
 const ManifestoGoModule = "github.com/Abraxas-365/manifesto"
 
 type InitOptions struct {
-	ProjectName string
-	GoModule    string
-	OutputDir   string
-	Modules     []string
-	Ref         string
+	ProjectName  string
+	GoModule     string
+	OutputDir    string
+	Modules      []string
+	Ref          string
+	WireModules  []string // Wireable modules to wire after init
 }
 
 // ProjectData is the template context for project-level templates.
 type ProjectData struct {
 	GoModule    string
 	ProjectName string
-	HasIAM      bool
-	HasFSX      bool
-	HasAI       bool
-	HasAsyncX   bool
 }
 
 func InitProject(opts InitOptions) error {
@@ -96,10 +93,6 @@ func InitProject(opts InitOptions) error {
 	projData := ProjectData{
 		GoModule:    opts.GoModule,
 		ProjectName: opts.ProjectName,
-		HasIAM:      config.HasModule(allModules, "iam"),
-		HasFSX:      config.HasModule(allModules, "fsx"),
-		HasAI:       config.HasModule(allModules, "ai"),
-		HasAsyncX:   config.HasModule(allModules, "asyncx"),
 	}
 
 	templateFiles := []struct {
@@ -126,7 +119,12 @@ func InitProject(opts InitOptions) error {
 
 	spin.Stop(true)
 
-	// Step 4: Write manifesto.yaml.
+	// Step 4: Post-process config.go to insert wiring markers.
+	if err := PostProcessConfigFile(projectRoot); err != nil {
+		return fmt.Errorf("post-process config.go: %w", err)
+	}
+
+	// Step 5: Write manifesto.yaml.
 	spin = ui.NewSpinner("Writing manifesto.yaml...")
 	spin.Start()
 
@@ -142,6 +140,35 @@ func InitProject(opts InitOptions) error {
 		return fmt.Errorf("save manifesto.yaml: %w", err)
 	}
 	spin.Stop(true)
+
+	// Step 6: Wire requested modules.
+	for _, wireMod := range opts.WireModules {
+		spin = ui.NewSpinner(fmt.Sprintf("Wiring %s...", wireMod))
+		spin.Start()
+
+		modified, err := WireModule(WireOptions{
+			ProjectRoot:  projectRoot,
+			ModuleName:   wireMod,
+			GoModule:     opts.GoModule,
+			WiredModules: manifest.WiredModules,
+		})
+		if err != nil {
+			spin.Stop(false)
+			return fmt.Errorf("wire %s: %w", wireMod, err)
+		}
+		spin.Stop(true)
+
+		manifest.WiredModules = append(manifest.WiredModules, wireMod)
+
+		ui.PrintWireSuccess(wireMod, modified)
+	}
+
+	// Save manifest again if modules were wired.
+	if len(opts.WireModules) > 0 {
+		if err := manifest.Save(projectRoot); err != nil {
+			return fmt.Errorf("save manifesto.yaml after wiring: %w", err)
+		}
+	}
 
 	return nil
 }

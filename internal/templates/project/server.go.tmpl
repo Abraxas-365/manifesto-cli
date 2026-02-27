@@ -1,9 +1,7 @@
 package main
 
 import (
-{{- if .HasIAM }}
 	"context"
-{{- end }}
 	"fmt"
 	"os"
 	"os/signal"
@@ -12,6 +10,7 @@ import (
 	"{{ .GoModule }}/pkg/config"
 	"{{ .GoModule }}/pkg/errx"
 	"{{ .GoModule }}/pkg/logx"
+	// manifesto:server-imports
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
@@ -38,20 +37,17 @@ func main() {
 		logx.SetLevel(logx.LevelInfo)
 	}
 
-	logx.Info("🚀 Starting {{ .ProjectName }} API Server...")
+	logx.Info("Starting {{ .ProjectName }} API Server...")
 	logx.Infof("Environment: %s", cfg.Server.Environment)
 
 	// 3. Initialize Dependency Container
 	container := NewContainer(cfg)
 	defer container.Cleanup()
 
-{{- if .HasIAM }}
-
 	// 4. Start background services
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	container.StartBackgroundServices(ctx)
-{{- end }}
 
 	// 5. Create Fiber App
 	app := fiber.New(fiber.Config{
@@ -80,7 +76,7 @@ func main() {
 	printRouteSummary()
 
 	// 11. Start Server with Graceful Shutdown
-	startServer(app, cfg{{ if .HasIAM }}, cancel{{ end }})
+	startServer(app, cfg, cancel)
 }
 
 // ============================================================================
@@ -141,36 +137,16 @@ func setupMiddleware(app *fiber.App, cfg *config.Config) {
 // ============================================================================
 
 func registerRoutes(app *fiber.App, container *Container) {
-	logx.Info("📝 Registering routes...")
+	logx.Info("Registering routes...")
 
-{{- if .HasIAM}}
-	// ── IAM Routes ───────────────────────────────────────────────────────
-	container.IAM.OAuthHandlers.RegisterRoutes(app)
-	logx.Info("  ✓ OAuth routes registered")
-
-	container.IAM.PasswordlessHandlers.RegisterRoutes(app)
-	logx.Info("  ✓ Passwordless auth routes registered")
-{{- end}}
+	// manifesto:public-routes
 
 	// Protected routes
-	protected := app.Group("/api/v1",
-{{- if .HasIAM}}
-		container.IAM.UnifiedAuthMiddleware.Authenticate(),
-{{- end}}
-	)
+	protected := app.Group("/api/v1")
 
-{{- if .HasIAM}}
-	container.IAM.APIKeyHandlers.RegisterRoutes(protected, container.IAM.UnifiedAuthMiddleware)
-	logx.Info("  ✓ API key routes registered")
-
-	container.IAM.InvitationHandlers.RegisterRoutes(protected, container.IAM.UnifiedAuthMiddleware)
-	logx.Info("  ✓ Invitation routes registered")
-{{- end}}
-
-	// ── Module Routes (auto-injected by `manifesto add`) ─────────────────
 	// manifesto:route-registration
 
-	logx.Info("✅ All routes registered")
+	logx.Info("All routes registered")
 }
 
 
@@ -196,8 +172,6 @@ func healthCheckHandler(container *Container) fiber.Handler {
 			health["db"] = "healthy"
 		}
 
-{{- if .HasIAM }}
-
 		// Check Redis
 		if _, err := container.Redis.Ping(c.Context()).Result(); err != nil {
 			health["redis"] = "unhealthy"
@@ -206,9 +180,6 @@ func healthCheckHandler(container *Container) fiber.Handler {
 		} else {
 			health["redis"] = "healthy"
 		}
-{{- end }}
-
-{{- if .HasFSX }}
 
 		// Check storage (optional — can be slow)
 		if c.QueryBool("check_storage", false) {
@@ -220,7 +191,6 @@ func healthCheckHandler(container *Container) fiber.Handler {
 				health["storage_accessible"] = exists
 			}
 		}
-{{- end }}
 
 		status := fiber.StatusOK
 		if health["status"] == "degraded" {
@@ -237,13 +207,6 @@ func infoHandler(cfg *config.Config) fiber.Handler {
 			"service":     "{{ .ProjectName }}",
 			"version":     "1.0.0",
 			"environment": cfg.Server.Environment,
-{{- if .HasIAM }}
-			"authentication": fiber.Map{
-				"oauth_providers": getEnabledOAuthProviders(cfg),
-				"passwordless":    true,
-				"api_keys":        true,
-			},
-{{- end }}
 			"endpoints": fiber.Map{
 				"health": "/health",
 				"api":    "/api/v1",
@@ -319,30 +282,14 @@ func globalErrorHandler(cfg *config.Config) fiber.ErrorHandler {
 // Server Lifecycle
 // ============================================================================
 
-{{ if .HasIAM -}}
 func startServer(app *fiber.App, cfg *config.Config, cancel context.CancelFunc) {
-{{- else -}}
-func startServer(app *fiber.App, cfg *config.Config) {
-{{- end }}
 	port := fmt.Sprintf("%d", cfg.Server.Port)
 
 	go func() {
 		logx.Info(repeatString("=", 70))
-		logx.Infof("🚀 Server listening on port %s", port)
-		logx.Infof("💚 Health: http://localhost:%s/health", port)
-		logx.Infof("🔒 Environment: %s", cfg.Server.Environment)
-{{- if .HasIAM }}
-		logx.Info("")
-		logx.Info("🔐 Authentication:")
-		if cfg.OAuth.Google.Enabled {
-			logx.Info("   ✅ Google OAuth")
-		}
-		if cfg.OAuth.Microsoft.Enabled {
-			logx.Info("   ✅ Microsoft OAuth")
-		}
-		logx.Info("   ✅ Passwordless OTP")
-		logx.Info("   ✅ API Keys")
-{{- end }}
+		logx.Infof("Server listening on port %s", port)
+		logx.Infof("Health: http://localhost:%s/health", port)
+		logx.Infof("Environment: %s", cfg.Server.Environment)
 		logx.Info(repeatString("=", 70))
 
 		if err := app.Listen(":" + port); err != nil {
@@ -355,18 +302,16 @@ func startServer(app *fiber.App, cfg *config.Config) {
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
 
 	sig := <-sigChan
-	logx.Infof("🛑 Received signal: %v", sig)
+	logx.Infof("Received signal: %v", sig)
 	logx.Info("Shutting down gracefully...")
 
-{{- if .HasIAM }}
 	cancel()
-{{- end }}
 
 	if err := app.ShutdownWithTimeout(30); err != nil {
 		logx.Errorf("Server forced to shutdown: %v", err)
 	}
 
-	logx.Info("✅ Server exited successfully")
+	logx.Info("Server exited successfully")
 }
 
 // ============================================================================
@@ -374,31 +319,11 @@ func startServer(app *fiber.App, cfg *config.Config) {
 // ============================================================================
 
 func printRouteSummary() {
-	logx.Info("📋 Route Summary:")
-	logx.Info("   ├─ Health: /health")
-	logx.Info("   ├─ Info: /")
-{{- if .HasIAM }}
-	logx.Info("   ├─ OAuth Auth: /auth/*")
-	logx.Info("   ├─ Passwordless: /auth/passwordless/*")
-	logx.Info("   ├─ API Keys: /api/v1/api-keys/*")
-	logx.Info("   ├─ Invitations: /api/v1/invitations/*")
-{{- end }}
-	logx.Info("   └─ API: /api/v1/*")
+	logx.Info("Route Summary:")
+	logx.Info("   |- Health: /health")
+	logx.Info("   |- Info: /")
+	logx.Info("   |- API: /api/v1/*")
 }
-
-{{- if .HasIAM }}
-
-func getEnabledOAuthProviders(cfg *config.Config) []string {
-	var providers []string
-	if cfg.OAuth.Google.Enabled {
-		providers = append(providers, "google")
-	}
-	if cfg.OAuth.Microsoft.Enabled {
-		providers = append(providers, "microsoft")
-	}
-	return providers
-}
-{{- end }}
 
 func randomString(n int) string {
 	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"

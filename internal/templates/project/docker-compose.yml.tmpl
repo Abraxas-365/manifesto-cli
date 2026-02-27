@@ -15,7 +15,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-{{- if .HasIAM }}
 
   redis:
     image: redis:7-alpine
@@ -29,10 +28,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-{{- end }}
 
 volumes:
   postgres_data:
-{{- if .HasIAM }}
   redis_data:
-{{- end }}

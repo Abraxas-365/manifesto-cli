@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/Abraxas-365/manifesto-cli/internal/config"
 	"github.com/Abraxas-365/manifesto-cli/internal/scaffold"
@@ -10,21 +11,24 @@ import (
 )
 
 var addCmd = &cobra.Command{
-	Use:   "add <domain-path>",
-	Short: "Add a new DDD domain package",
-	Long: `Scaffold a full domain package with entity, repository, service,
-infrastructure, and handler layers.
+	Use:   "add <module-or-domain-path>",
+	Short: "Wire a module or scaffold a DDD domain package",
+	Long: `Wire a module into the project or scaffold a full domain package.
 
-Examples:
+Module wiring (adds imports, fields, init code to container/server):
+  manifesto add jobx
+  manifesto add notifx
+  manifesto add iam
+
+Domain scaffolding (creates entity, repo, service, handler layers):
   manifesto add pkg/recruitment/candidate
-  manifesto add pkg/billing/invoice
-  manifesto add pkg/notification`,
+  manifesto add pkg/billing/invoice`,
 	Args: cobra.ExactArgs(1),
 	RunE: runAdd,
 }
 
 func runAdd(cmd *cobra.Command, args []string) error {
-	domainPath := args[0]
+	arg := args[0]
 
 	projectRoot, err := findProjectRoot()
 	if err != nil {
@@ -36,6 +40,53 @@ func runAdd(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("not a manifesto project (no manifesto.yaml found)")
 	}
 
+	// Dispatch: wireable module vs domain path
+	if config.IsWireableModule(arg) {
+		return runWireModule(projectRoot, manifest, arg)
+	}
+
+	// Domain scaffolding (existing behavior) — paths contain /
+	if !strings.Contains(arg, "/") {
+		return fmt.Errorf("unknown module '%s'. Use a wireable module (jobx, notifx, iam) or a domain path (pkg/mymodule/entity)", arg)
+	}
+
+	return runAddDomain(projectRoot, manifest, arg)
+}
+
+func runWireModule(projectRoot string, manifest *config.Manifest, moduleName string) error {
+	// Check not already wired
+	if manifest.IsWired(moduleName) {
+		ui.StepInfo(fmt.Sprintf("%s is already wired", moduleName))
+		return nil
+	}
+
+	fmt.Println()
+	spin := ui.NewSpinner(fmt.Sprintf("Wiring %s...", moduleName))
+	spin.Start()
+
+	modified, err := scaffold.WireModule(scaffold.WireOptions{
+		ProjectRoot:  projectRoot,
+		ModuleName:   moduleName,
+		GoModule:     manifest.Project.GoModule,
+		WiredModules: manifest.WiredModules,
+	})
+	if err != nil {
+		spin.Stop(false)
+		return err
+	}
+	spin.Stop(true)
+
+	// Update manifest
+	manifest.WiredModules = append(manifest.WiredModules, moduleName)
+	if err := manifest.Save(projectRoot); err != nil {
+		return fmt.Errorf("save manifesto.yaml: %w", err)
+	}
+
+	ui.PrintWireSuccess(moduleName, modified)
+	return nil
+}
+
+func runAddDomain(projectRoot string, manifest *config.Manifest, domainPath string) error {
 	data := scaffold.NewDomainData(manifest.Project.GoModule, domainPath)
 
 	fmt.Println()

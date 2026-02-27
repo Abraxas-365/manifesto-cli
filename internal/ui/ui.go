@@ -21,15 +21,15 @@ var (
 )
 
 const banner = `
-                        _  __          _        
-  _ __ ___   __ _ _ __ (_)/ _| ___ ___| |_ ___  
- | '_ ` + "`" + ` _ \ / _` + "`" + ` | '_ \| | |_ / _ / __| __/ _ \ 
+                        _  __          _
+  _ __ ___   __ _ _ __ (_)/ _| ___ ___| |_ ___
+ | '_ ` + "`" + ` _ \ / _` + "`" + ` | '_ \| | |_ / _ / __| __/ _ \
  | | | | | | (_| | | | | |  _|  __\__ | || (_) |
- |_| |_| |_|\__,_|_| |_|_|_|  \___|___/\__\___/ 
+ |_| |_| |_|\__,_|_| |_|_|_|  \___|___/\__\___/
 `
 
 func PrintBanner() {
-	Cyan.Println(banner)
+	Cyan.Print(banner)
 }
 
 func PrintCreateHeader(projectName, goModule string) {
@@ -129,8 +129,8 @@ func PrintSuccess(projectName string) {
 	Cyan.Println("    manifesto add pkg/mymodule/entity")
 	Dim.Println("    Scaffold a new DDD domain package")
 	fmt.Println()
-	Cyan.Println("    manifesto install ai")
-	Dim.Println("    Install an optional module")
+	Cyan.Println("    manifesto add jobx")
+	Dim.Println("    Wire a module into the project")
 	fmt.Println()
 	Dim.Println("  We suggest that you begin by typing:")
 	fmt.Println()
@@ -167,43 +167,21 @@ func PrintAddSuccess(entityName, domainPath, pkgName string) {
 	fmt.Println()
 }
 
-func printFile(path, desc string) {
-	fmt.Printf("    %s %s  %s\n", Green.Sprint("✓"), Cyan.Sprint(path), Dim.Sprint(desc))
+func PrintWireSuccess(moduleName string, modifiedFiles []string) {
+	fmt.Println()
+	Green.Println("  Success!", White.Sprintf(" Wired %s", moduleName))
+	fmt.Println()
+	if len(modifiedFiles) > 0 {
+		Dim.Println("  Modified files:")
+		for _, f := range modifiedFiles {
+			fmt.Printf("    %s %s\n", Green.Sprint("~"), Cyan.Sprint(f))
+		}
+		fmt.Println()
+	}
 }
 
-func PrintModules(modules []ModuleDisplay) {
-	fmt.Println()
-	Bold.Println("  Available Manifesto Modules")
-	fmt.Println()
-
-	for _, m := range modules {
-		status := Dim.Sprint("○")
-		if m.Installed {
-			status = Green.Sprint("●")
-		}
-
-		tag := ""
-		if m.Core {
-			tag = Yellow.Sprint(" core")
-		}
-
-		deps := ""
-		if m.Deps != "" {
-			deps = Dim.Sprintf(" → %s", m.Deps)
-		}
-
-		fmt.Printf("    %s  %-12s %s%s%s\n",
-			status,
-			Bold.Sprint(m.Name),
-			m.Description,
-			tag,
-			deps,
-		)
-	}
-
-	fmt.Println()
-	fmt.Printf("    %s installed   %s available\n", Green.Sprint("●"), Dim.Sprint("○"))
-	fmt.Println()
+func printFile(path, desc string) {
+	fmt.Printf("    %s %s  %s\n", Green.Sprint("✓"), Cyan.Sprint(path), Dim.Sprint(desc))
 }
 
 type ModuleDisplay struct {
@@ -212,6 +190,58 @@ type ModuleDisplay struct {
 	Installed   bool
 	Core        bool
 	Deps        string
+}
+
+type WireableModuleDisplay struct {
+	Name        string
+	Description string
+	Wired       bool
+}
+
+func PrintModulesWithSections(libraries []ModuleDisplay, wireables []WireableModuleDisplay) {
+	fmt.Println()
+	Bold.Println("  Libraries (always present)")
+	fmt.Println()
+
+	for _, m := range libraries {
+		status := Dim.Sprint("○")
+		if m.Installed {
+			status = Green.Sprint("●")
+		}
+
+		deps := ""
+		if m.Deps != "" {
+			deps = Dim.Sprintf(" → %s", m.Deps)
+		}
+
+		fmt.Printf("    %s  %-12s %s%s\n",
+			status,
+			Bold.Sprint(m.Name),
+			m.Description,
+			deps,
+		)
+	}
+
+	fmt.Println()
+	Bold.Println("  Wireable Modules")
+	fmt.Println()
+
+	for _, m := range wireables {
+		status := Dim.Sprint("○ not wired")
+		if m.Wired {
+			status = Green.Sprint("● wired")
+		}
+
+		fmt.Printf("    %s  %-8s  %s\n",
+			status,
+			Bold.Sprint(m.Name),
+			m.Description,
+		)
+	}
+
+	fmt.Println()
+	fmt.Printf("    %s installed/wired   %s available\n", Green.Sprint("●"), Dim.Sprint("○"))
+	fmt.Println()
 }
 
 func PrintInstallSuccess(moduleName string, installed []string) {

@@ -6,19 +6,12 @@ import (
 	"os"
 
 	"{{.GoModule}}/pkg/config"
-{{- if .HasFSX}}
 	"{{.GoModule}}/pkg/fsx"
 	"{{.GoModule}}/pkg/fsx/fsxlocal"
 	"{{.GoModule}}/pkg/fsx/fsxs3"
-{{- end}}
-{{- if .HasIAM}}
-	"{{.GoModule}}/pkg/iam/iamcontainer"
-{{- end}}
 	"{{.GoModule}}/pkg/logx"
-{{- if .HasFSX}}
 	awsConfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-{{- end}}
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 	"github.com/redis/go-redis/v9"
@@ -30,29 +23,24 @@ type Container struct {
 	Config *config.Config
 
 	// Infrastructure
-	DB    *sqlx.DB
-	Redis *redis.Client
-{{- if .HasFSX}}
+	DB         *sqlx.DB
+	Redis      *redis.Client
 	FileSystem fsx.FileSystem
 	S3Client   *s3.Client
-{{- end}}
 
 	// Bounded-context containers
-{{- if .HasIAM}}
-	IAM *iamcontainer.Container
-{{- end}}
 	// manifesto:container-fields
 }
 
 func NewContainer(cfg *config.Config) *Container {
-	logx.Info("🔧 Initializing application container...")
+	logx.Info("Initializing application container...")
 
 	c := &Container{Config: cfg}
 
 	c.initInfrastructure()
 	c.initModules()
 
-	logx.Info("✅ Application container initialized")
+	logx.Info("Application container initialized")
 	return c
 }
 
@@ -61,7 +49,7 @@ func NewContainer(cfg *config.Config) *Container {
 // ---------------------------------------------------------------------------
 
 func (c *Container) initInfrastructure() {
-	logx.Info("🏗️ Initializing infrastructure...")
+	logx.Info("Initializing infrastructure...")
 
 	// Database
 	dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
@@ -81,7 +69,7 @@ func (c *Container) initInfrastructure() {
 	db.SetMaxIdleConns(c.Config.Database.MaxIdleConns)
 	db.SetConnMaxLifetime(c.Config.Database.ConnMaxLifetime)
 	c.DB = db
-	logx.Info("  ✅ Database connected")
+	logx.Info("  Database connected")
 
 	// Redis
 	c.Redis = redis.NewClient(&redis.Options{
@@ -92,25 +80,20 @@ func (c *Container) initInfrastructure() {
 	if _, err := c.Redis.Ping(context.Background()).Result(); err != nil {
 		logx.Fatalf("Failed to connect to Redis: %v (Redis is required)", err)
 	}
-	logx.Info("  ✅ Redis connected")
-
-{{- if .HasFSX}}
+	logx.Info("  Redis connected")
 
 	// File storage
 	c.initFileStorage()
-{{- end}}
 
-	logx.Info("✅ Infrastructure initialized")
+	logx.Info("Infrastructure initialized")
 }
-
-{{- if .HasFSX}}
 
 func (c *Container) initFileStorage() {
 	storageMode := getEnv("STORAGE_MODE", "local")
 
 	switch storageMode {
 	case "s3":
-		awsRegion := getEnv("AWS_REGION", c.Config.Email.AWSRegion)
+		awsRegion := getEnv("AWS_REGION", "us-east-1")
 		awsBucket := getEnv("AWS_BUCKET", "{{.ProjectName}}-uploads")
 
 		cfg, err := awsConfig.LoadDefaultConfig(context.TODO(), awsConfig.WithRegion(awsRegion))
@@ -119,7 +102,7 @@ func (c *Container) initFileStorage() {
 		}
 		c.S3Client = s3.NewFromConfig(cfg)
 		c.FileSystem = fsxs3.NewS3FileSystem(c.S3Client, awsBucket, "")
-		logx.Infof("  ✅ S3 file system configured (bucket: %s, region: %s)", awsBucket, awsRegion)
+		logx.Infof("  S3 file system configured (bucket: %s, region: %s)", awsBucket, awsRegion)
 
 	case "local":
 		uploadDir := getEnv("UPLOAD_DIR", "./uploads")
@@ -128,29 +111,19 @@ func (c *Container) initFileStorage() {
 			logx.Fatalf("Failed to initialize local file system: %v", err)
 		}
 		c.FileSystem = localFS
-		logx.Infof("  ✅ Local file system configured (path: %s)", localFS.GetBasePath())
+		logx.Infof("  Local file system configured (path: %s)", localFS.GetBasePath())
 
 	default:
 		logx.Fatalf("Unknown STORAGE_MODE: %s (use 'local' or 's3')", storageMode)
 	}
 }
-{{- end}}
 
 // ---------------------------------------------------------------------------
 // Module composition
 // ---------------------------------------------------------------------------
 
 func (c *Container) initModules() {
-	logx.Info("📦 Initializing modules...")
-
-{{- if .HasIAM}}
-	c.IAM = iamcontainer.New(iamcontainer.Deps{
-		DB:          c.DB,
-		Redis:       c.Redis,
-		Cfg:         c.Config,
-		OTPNotifier: NewConsoleNotifier(),
-	})
-{{- end}}
+	logx.Info("Initializing modules...")
 
 	// manifesto:module-init
 }
@@ -160,21 +133,18 @@ func (c *Container) initModules() {
 // ---------------------------------------------------------------------------
 
 func (c *Container) StartBackgroundServices(ctx context.Context) {
-	logx.Info("🔄 Starting background services...")
-{{- if .HasIAM}}
-	c.IAM.StartBackgroundServices(ctx)
-{{- end}}
+	logx.Info("Starting background services...")
 	// manifesto:background-start
 }
 
 func (c *Container) Cleanup() {
-	logx.Info("🧹 Cleaning up resources...")
+	logx.Info("Cleaning up resources...")
 
 	if c.DB != nil {
 		if err := c.DB.Close(); err != nil {
 			logx.Errorf("Error closing database: %v", err)
 		} else {
-			logx.Info("  ✅ Database connection closed")
+			logx.Info("  Database connection closed")
 		}
 	}
 
@@ -182,11 +152,11 @@ func (c *Container) Cleanup() {
 		if err := c.Redis.Close(); err != nil {
 			logx.Errorf("Error closing Redis: %v", err)
 		} else {
-			logx.Info("  ✅ Redis connection closed")
+			logx.Info("  Redis connection closed")
 		}
 	}
 
-	logx.Info("✅ Cleanup complete")
+	logx.Info("Cleanup complete")
 }
 
 func getEnv(key, fallback string) string {
@@ -194,31 +164,6 @@ func getEnv(key, fallback string) string {
 		return value
 	}
 	return fallback
-}
-
-// ConsoleNotifier implements the NotificationService interface
-// by printing OTP codes to the terminal/console
-type ConsoleNotifier struct{}
-
-// NewConsoleNotifier creates a new console-based OTP notifier
-func NewConsoleNotifier() *ConsoleNotifier {
-	return &ConsoleNotifier{}
-}
-
-// SendOTP prints the OTP code to the terminal
-func (n *ConsoleNotifier) SendOTP(ctx context.Context, contact string, code string) error {
-	fmt.Println("\n" + repeatString("=", 60))
-	fmt.Println("📧 OTP NOTIFICATION (Console Output)")
-	fmt.Println(repeatString("=", 60))
-	fmt.Printf("📨 To: %s\n", contact)
-	fmt.Printf("🔐 Code: %s\n", code)
-	fmt.Println(repeatString("=", 60))
-	fmt.Println("⚠️  This is console output for development only")
-	fmt.Println("⚠️  In production, configure email service in config")
-	fmt.Println(repeatString("=", 60) + "\n")
-
-	logx.Infof("📧 OTP sent to %s: %s", contact, code)
-	return nil
 }
 
 func repeatString(s string, count int) string {
@@ -229,3 +174,4 @@ func repeatString(s string, count int) string {
 	return result
 }
 
+// manifesto:container-helpers
