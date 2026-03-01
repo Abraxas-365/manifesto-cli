@@ -140,7 +140,7 @@ export AWS_BUCKET = {{PROJECTNAME}}-uploads`,
 	"{{GOMODULE}}/pkg/jobx/jobxredis"`,
 		ContainerFields: `	JobClient *jobx.Client`,
 		ModuleInit:      `	c.initJobx()`,
-		BackgroundStart: `	c.JobClient.Start(ctx)`,
+		BackgroundStart: `	go c.JobClient.Start(ctx)`,
 
 		ContainerHelpers: `func (c *Container) initJobx() {
 	queue := jobxredis.NewRedisQueue(c.Redis)
