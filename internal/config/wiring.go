@@ -42,6 +42,7 @@ type Bridge struct {
 	RequiresModule   string // Other module that must also be wired
 	ContainerImports string // Additional imports for bridge
 	ContainerInit    string // Code to inject into initModules()
+	ContainerHelpers string // Top-level helper functions for bridge
 }
 
 // WireableModuleRegistry defines all modules that can be wired into a project.
@@ -237,21 +238,18 @@ export NOTIFX_AWS_REGION = us-east-1`,
 
 		RequiredModules: []string{"iam", "migrations"},
 
-		ConfigFields: `	Auth         AuthConfig
-	OAuth        OAuthConfig
-	TenantConfig TenantConfig`,
+		ConfigFields: ``,
+		ConfigLoads:  ``,
 
-		ConfigLoads: `	cfg.Auth = loadAuthConfig()
-	cfg.OAuth = loadOAuthConfig()
-	cfg.TenantConfig = loadTenantConfig()`,
-
-		ContainerImports: `	"{{GOMODULE}}/pkg/iam/iamcontainer"`,
+		ContainerImports: `	"{{GOMODULE}}/pkg/iam/iamcontainer"
+	"{{GOMODULE}}/pkg/kernel"`,
 		ContainerFields:  `	IAM *iamcontainer.Container`,
 		ModuleInit: `	c.IAM = iamcontainer.New(iamcontainer.Deps{
-		DB:          c.DB,
-		Redis:       c.Redis,
-		Cfg:         c.Config,
-		OTPNotifier: NewConsoleNotifier(),
+		DB:                 c.DB,
+		Redis:              c.Redis,
+		Cfg:                c.Config,
+		OTPNotifier:        NewConsoleNotifier(),
+		InvitationNotifier: NewConsoleInvitationNotifier(),
 	})`,
 		BackgroundStart: `	c.IAM.StartBackgroundServices(ctx)`,
 
@@ -277,6 +275,31 @@ func (n *ConsoleNotifier) SendOTP(ctx context.Context, contact string, code stri
 	fmt.Println(repeatString("=", 60) + "\n")
 
 	logx.Infof("📧 OTP sent to %s: %s", contact, code)
+	return nil
+}
+
+// ConsoleInvitationNotifier implements invitation.NotificationService
+// by printing invitation details to the terminal/console
+type ConsoleInvitationNotifier struct{}
+
+func NewConsoleInvitationNotifier() *ConsoleInvitationNotifier {
+	return &ConsoleInvitationNotifier{}
+}
+
+func (n *ConsoleInvitationNotifier) SendInvitation(ctx context.Context, email string, token string, tenantID kernel.TenantID, invitedBy kernel.UserID) error {
+	fmt.Println("\n" + repeatString("=", 60))
+	fmt.Println("📧 INVITATION NOTIFICATION (Console Output)")
+	fmt.Println(repeatString("=", 60))
+	fmt.Printf("📨 To: %s\n", email)
+	fmt.Printf("🔗 Token: %s\n", token)
+	fmt.Printf("🏢 Tenant: %s\n", tenantID)
+	fmt.Printf("👤 Invited by: %s\n", invitedBy)
+	fmt.Println(repeatString("=", 60))
+	fmt.Println("⚠️  This is console output for development only")
+	fmt.Println("⚠️  In production, configure notifx for email delivery")
+	fmt.Println(repeatString("=", 60) + "\n")
+
+	logx.Infof("📧 Invitation sent to %s (token: %s...)", email, token[:8])
 	return nil
 }`,
 
@@ -411,6 +434,56 @@ export TENANT_MAX_USERS_ENTERPRISE = 500`,
 
 	container.IAM.InvitationHandlers.RegisterRoutes(protected, container.IAM.UnifiedAuthMiddleware)
 	logx.Info("  > Invitation routes registered")`,
+
+		Bridges: []Bridge{
+			{
+				RequiresModule:   "notifx",
+				ContainerImports: `	"{{GOMODULE}}/pkg/notifx"`,
+				ContainerInit: `	// Bridge: iam + notifx — use notifx for OTP and invitation emails
+	c.IAM = iamcontainer.New(iamcontainer.Deps{
+		DB:                 c.DB,
+		Redis:              c.Redis,
+		Cfg:                c.Config,
+		OTPNotifier:        NewNotifxOTPNotifier(c.NotifxClient),
+		InvitationNotifier: NewNotifxInvitationNotifier(c.NotifxClient),
+	})`,
+				ContainerHelpers: `// NotifxOTPNotifier implements otp.NotificationService using notifx
+type NotifxOTPNotifier struct {
+	client *notifx.Client
+}
+
+func NewNotifxOTPNotifier(client *notifx.Client) *NotifxOTPNotifier {
+	return &NotifxOTPNotifier{client: client}
+}
+
+func (n *NotifxOTPNotifier) SendOTP(ctx context.Context, contact string, code string) error {
+	return n.client.SendEmail(ctx, notifx.EmailMessage{
+		To:      []string{contact},
+		Subject: "Your verification code",
+		HTMLBody: fmt.Sprintf("<h2>Your verification code is: <strong>%s</strong></h2><p>This code will expire shortly.</p>", code),
+		TextBody: fmt.Sprintf("Your verification code is: %s", code),
+	})
+}
+
+// NotifxInvitationNotifier implements invitation.NotificationService using notifx
+type NotifxInvitationNotifier struct {
+	client *notifx.Client
+}
+
+func NewNotifxInvitationNotifier(client *notifx.Client) *NotifxInvitationNotifier {
+	return &NotifxInvitationNotifier{client: client}
+}
+
+func (n *NotifxInvitationNotifier) SendInvitation(ctx context.Context, email string, token string, tenantID kernel.TenantID, invitedBy kernel.UserID) error {
+	return n.client.SendEmail(ctx, notifx.EmailMessage{
+		To:      []string{email},
+		Subject: "You've been invited",
+		HTMLBody: fmt.Sprintf("<h2>You've been invited!</h2><p>Use the following token to accept your invitation: <strong>%s</strong></p>", token),
+		TextBody: fmt.Sprintf("You've been invited! Use the following token to accept your invitation: %s", token),
+	})
+}`,
+			},
+		},
 	},
 }
 

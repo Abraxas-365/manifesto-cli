@@ -64,9 +64,15 @@ func InitProject(opts InitOptions) error {
 		}
 	}
 
+	totalSteps := 4
+	if len(opts.WireModules) > 0 {
+		totalSteps = 4 + len(opts.WireModules)
+	}
+	step := 1
+
 	// Step 1: Fetch module source from GitHub.
 	if len(allPaths) > 0 {
-		spin := ui.NewSpinner(fmt.Sprintf("Downloading manifesto@%s...", ref))
+		spin := ui.NewStepSpinner(step, totalSteps, fmt.Sprintf("Downloading manifesto@%s...", ref))
 		spin.Start()
 		err := client.FetchModulePaths(ref, allPaths, projectRoot, ManifestoGoModule, opts.GoModule)
 		if err != nil {
@@ -76,18 +82,20 @@ func InitProject(opts InitOptions) error {
 		}
 		spin.Stop(true)
 	}
+	step++
 
 	// Step 2: Generate go.mod.
-	spin := ui.NewSpinner("Creating go.mod...")
+	spin := ui.NewStepSpinner(step, totalSteps, "Creating go.mod...")
 	spin.Start()
 	if err := generateGoMod(projectRoot, opts.GoModule, client, ref); err != nil {
 		spin.Stop(false)
 		return fmt.Errorf("generate go.mod: %w", err)
 	}
 	spin.Stop(true)
+	step++
 
 	// Step 3: Generate project files from templates.
-	spin = ui.NewSpinner("Generating project files...")
+	spin = ui.NewStepSpinner(step, totalSteps, "Generating project files...")
 	spin.Start()
 
 	projData := ProjectData{
@@ -119,13 +127,15 @@ func InitProject(opts InitOptions) error {
 
 	spin.Stop(true)
 
-	// Step 4: Post-process config.go to insert wiring markers.
+	// Post-process config.go to insert wiring markers.
 	if err := PostProcessConfigFile(projectRoot); err != nil {
 		return fmt.Errorf("post-process config.go: %w", err)
 	}
 
-	// Step 5: Write manifesto.yaml.
-	spin = ui.NewSpinner("Writing manifesto.yaml...")
+	step++
+
+	// Write manifesto.yaml.
+	spin = ui.NewStepSpinner(step, totalSteps, "Writing manifesto.yaml...")
 	spin.Start()
 
 	manifest := config.NewManifest(opts.ProjectName, opts.GoModule, ref)
@@ -141,8 +151,8 @@ func InitProject(opts InitOptions) error {
 	}
 	spin.Stop(true)
 
-	// Step 6: Wire requested modules (download required source first).
-	for _, wireMod := range opts.WireModules {
+	// Wire requested modules (download required source first).
+	for i, wireMod := range opts.WireModules {
 		spec, ok := config.WireableModuleRegistry[wireMod]
 		if !ok {
 			return fmt.Errorf("unknown wireable module: %s", wireMod)
@@ -155,10 +165,11 @@ func InitProject(opts InitOptions) error {
 			}
 		}
 
-		spin = ui.NewSpinner(fmt.Sprintf("Wiring %s...", wireMod))
+		wireStep := step + i + 1
+		spin = ui.NewStepSpinner(wireStep, totalSteps, fmt.Sprintf("Wiring %s...", wireMod))
 		spin.Start()
 
-		modified, err := WireModule(WireOptions{
+		result, err := WireModule(WireOptions{
 			ProjectRoot:  projectRoot,
 			ModuleName:   wireMod,
 			GoModule:     opts.GoModule,
@@ -173,7 +184,11 @@ func InitProject(opts InitOptions) error {
 
 		manifest.WiredModules = append(manifest.WiredModules, wireMod)
 
-		ui.PrintWireSuccess(wireMod, modified)
+		if len(result.ActivatedBridges) > 0 {
+			for _, b := range result.ActivatedBridges {
+				ui.StepInfo(fmt.Sprintf("Bridge: %s + %s auto-connected", wireMod, b))
+			}
+		}
 	}
 
 	// Save manifest again if modules were wired.

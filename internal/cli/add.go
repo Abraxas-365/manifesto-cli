@@ -88,7 +88,7 @@ func runWireModule(projectRoot string, manifest *config.Manifest, moduleName str
 	spin := ui.NewSpinner(fmt.Sprintf("Wiring %s...", moduleName))
 	spin.Start()
 
-	modified, err := scaffold.WireModule(scaffold.WireOptions{
+	result, err := scaffold.WireModule(scaffold.WireOptions{
 		ProjectRoot:  projectRoot,
 		ModuleName:   moduleName,
 		GoModule:     manifest.Project.GoModule,
@@ -107,7 +107,7 @@ func runWireModule(projectRoot string, manifest *config.Manifest, moduleName str
 		return fmt.Errorf("save manifesto.yaml: %w", err)
 	}
 
-	ui.PrintWireSuccess(moduleName, modified)
+	ui.PrintWireSuccess(moduleName, result.ModifiedFiles, result.ActivatedBridges)
 	return nil
 }
 
@@ -124,6 +124,6 @@ func runAddDomain(projectRoot string, manifest *config.Manifest, domainPath stri
 	}
 	spin.Stop(true)
 
-	ui.PrintAddSuccess(data.EntityName, domainPath, data.PackageName)
+	ui.PrintAddSuccess(data.EntityName, domainPath, data.PackageName, data.TableName)
 	return nil
 }

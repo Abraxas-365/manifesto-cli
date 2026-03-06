@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"sort"
@@ -126,37 +125,20 @@ func runInit(cmd *cobra.Command, args []string) error {
 	} else {
 		// Interactive selection.
 		if len(availableWireable) > 0 {
-			fmt.Println("  Which modules would you like to wire?")
-			fmt.Println()
-			for _, name := range availableWireable {
+			items := make([]ui.SelectableItem, len(availableWireable))
+			for i, name := range availableWireable {
 				spec := config.WireableModuleRegistry[name]
-				fmt.Printf("    %s  %-8s  %s\n", ui.Cyan.Sprint("▸"), ui.Bold.Sprint(name), ui.Dim.Sprint(spec.Description))
-			}
-			fmt.Println()
-			fmt.Print("  Enter modules (comma-separated), 'all', or press Enter to skip: ")
-
-			reader := bufio.NewReader(os.Stdin)
-			input, _ := reader.ReadString('\n')
-			input = strings.TrimSpace(input)
-
-			if input == "all" {
-				wireModules = availableWireable
-			} else if input != "" {
-				for _, m := range strings.Split(input, ",") {
-					m = strings.TrimSpace(m)
-					if m == "" {
-						continue
-					}
-					if !config.IsWireableModule(m) {
-						return fmt.Errorf("unknown wireable module: '%s'", m)
-					}
-					if initQuick && m == "iam" {
-						return fmt.Errorf("module 'iam' is not available for quick projects")
-					}
-					wireModules = append(wireModules, m)
+				items[i] = ui.SelectableItem{
+					Name:        name,
+					Description: spec.Description,
 				}
 			}
-			fmt.Println()
+
+			selected, err := ui.MultiSelect("Which modules would you like to wire?", items)
+			if err != nil {
+				return err
+			}
+			wireModules = selected
 		}
 	}
 
@@ -168,11 +150,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		fmt.Println()
 	}
 
-	// For quick projects, default to quick-project branch.
 	ref := initRef
-	if initQuick && ref == "" {
-		ref = config.QuickProjectRef
-	}
 
 	// Run scaffold.
 	cwd, err := os.Getwd()
@@ -191,6 +169,6 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	ui.PrintSuccess(projectName)
+	ui.PrintSuccess(projectName, wireModules)
 	return nil
 }

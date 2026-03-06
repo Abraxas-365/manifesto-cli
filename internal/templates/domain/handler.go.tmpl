@@ -1,7 +1,9 @@
 package {{.PackageName}}api
 
 import (
+	"{{.GoModule}}/{{.DomainPath}}"
 	"{{.GoModule}}/{{.DomainPath}}/{{.PackageName}}srv"
+	"{{.GoModule}}/pkg/kernel"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -13,7 +15,61 @@ func New{{.EntityName}}Handlers(service *{{.PackageName}}srv.{{.EntityName}}Serv
 	return &{{.EntityName}}Handlers{service: service}
 }
 
-// RegisterRoutes registers all {{.EntityName}} routes on the given router.
 func (h *{{.EntityName}}Handlers) RegisterRoutes(router fiber.Router) {
-	//group := router.Group("/{{.TableName}}")
+	group := router.Group("/{{.TableName}}")
+
+	group.Post("/", h.Create)
+	group.Get("/", h.List)
+	group.Get("/:id", h.GetByID)
+	group.Delete("/:id", h.Delete)
+}
+
+func (h *{{.EntityName}}Handlers) Create(c *fiber.Ctx) error {
+	var req {{.PackageName}}.Create{{.EntityName}}Request
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
+	}
+
+	entity, err := h.service.Create(c.Context(), req)
+	if err != nil {
+		return err
+	}
+
+	return c.Status(fiber.StatusCreated).JSON(entity.ToResponse())
+}
+
+func (h *{{.EntityName}}Handlers) GetByID(c *fiber.Ctx) error {
+	id := kernel.New{{.EntityName}}ID(c.Params("id"))
+
+	entity, err := h.service.GetByID(c.Context(), id)
+	if err != nil {
+		return err
+	}
+
+	return c.JSON(entity.ToResponse())
+}
+
+func (h *{{.EntityName}}Handlers) List(c *fiber.Ctx) error {
+	tenantID := kernel.TenantID(c.Query("tenant_id"))
+	opts := kernel.PaginationOptions{
+		Page:     c.QueryInt("page", 1),
+		PageSize: c.QueryInt("page_size", 20),
+	}
+
+	result, err := h.service.List(c.Context(), tenantID, opts)
+	if err != nil {
+		return err
+	}
+
+	return c.JSON(result)
+}
+
+func (h *{{.EntityName}}Handlers) Delete(c *fiber.Ctx) error {
+	id := kernel.New{{.EntityName}}ID(c.Params("id"))
+
+	if err := h.service.Delete(c.Context(), id); err != nil {
+		return err
+	}
+
+	return c.JSON(fiber.Map{"message": "{{.EntityName}} deleted successfully"})
 }

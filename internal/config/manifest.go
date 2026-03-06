@@ -93,8 +93,9 @@ var ModuleRegistry = map[string]Module{
 	},
 }
 
-// QuickProjectRef is the default Git ref for quick projects.
-const QuickProjectRef = "quick-project"
+// QuickProjectRef is kept for backwards compatibility but no longer needed.
+// Quick projects now use the same source as full projects (latest tag/main).
+const QuickProjectRef = ""
 
 // CoreModules returns all Core modules to download during init.
 func CoreModules(quick bool) []string {

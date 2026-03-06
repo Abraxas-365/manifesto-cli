@@ -66,6 +66,11 @@ func NewSpinner(message string) *Spinner {
 	}
 }
 
+// NewStepSpinner creates a spinner with a step counter prefix (e.g. "[1/6] Downloading...")
+func NewStepSpinner(step, total int, message string) *Spinner {
+	return NewSpinner(Dim.Sprintf("[%d/%d]", step, total) + " " + message)
+}
+
 func (s *Spinner) Start() {
 	go func() {
 		i := 0
@@ -114,34 +119,51 @@ func StepWarn(msg string) {
 	Yellow.Printf("  ⚠ %s\n", msg)
 }
 
-func PrintSuccess(projectName string) {
+func PrintSuccess(projectName string, wiredModules []string) {
 	fmt.Println()
 	Green.Println("  Success!", White.Sprintf(" Created %s", projectName))
 	fmt.Println()
-	Dim.Println("  Inside that directory, you can run:")
-	fmt.Println()
-	Cyan.Println("    go mod tidy")
-	Dim.Println("    Install dependencies")
-	fmt.Println()
-	Cyan.Println("    go build ./...")
-	Dim.Println("    Build the project")
-	fmt.Println()
-	Cyan.Println("    manifesto add pkg/mymodule/entity")
-	Dim.Println("    Scaffold a new DDD domain package")
-	fmt.Println()
-	Cyan.Println("    manifesto add jobx")
-	Dim.Println("    Wire a module into the project")
-	fmt.Println()
-	Dim.Println("  We suggest that you begin by typing:")
+
+	hasIAM := false
+	for _, m := range wiredModules {
+		if m == "iam" {
+			hasIAM = true
+			break
+		}
+	}
+
+	Dim.Println("  Get started:")
 	fmt.Println()
 	Cyan.Printf("    cd %s\n", projectName)
 	Cyan.Println("    go mod tidy")
+	if hasIAM {
+		Cyan.Println("    make up         # start postgres + redis")
+		Cyan.Println("    make migrate    # run database migrations")
+	} else {
+		Cyan.Println("    make up         # start postgres + redis")
+	}
+	Cyan.Println("    make dev        # start with hot reload")
 	fmt.Println()
+
+	Dim.Println("  Add your first domain:")
+	fmt.Println()
+	Cyan.Println("    manifesto add pkg/mymodule/entity")
+	fmt.Println()
+
+	if len(wiredModules) == 0 {
+		Dim.Println("  Wire modules anytime:")
+		fmt.Println()
+		Cyan.Println("    manifesto add iam       # auth, users, tenants")
+		Cyan.Println("    manifesto add jobx      # background jobs")
+		Cyan.Println("    manifesto modules       # see all available")
+		fmt.Println()
+	}
+
 	Dim.Println("  Happy hacking!")
 	fmt.Println()
 }
 
-func PrintAddSuccess(entityName, domainPath, pkgName string) {
+func PrintAddSuccess(entityName, domainPath, pkgName, tableName string) {
 	fmt.Println()
 	Green.Println("  Success!", White.Sprintf(" Created domain %s", entityName))
 	fmt.Println()
@@ -152,22 +174,30 @@ func PrintAddSuccess(entityName, domainPath, pkgName string) {
 	printFile(domainPath+"/errors.go", "Error registry")
 	printFile(domainPath+"/"+pkgName+"srv/service.go", "Service layer")
 	printFile(domainPath+"/"+pkgName+"infra/postgres.go", "Postgres repository")
-	printFile(domainPath+"/"+pkgName+"api/handler.go", "HTTP handlers")
+	printFile(domainPath+"/"+pkgName+"api/handler.go", "HTTP handlers (CRUD ready)")
 	printFile(domainPath+"/"+pkgName+"container/container.go", "Module container (DI wiring)")
 	fmt.Println()
 	Dim.Printf("  + kernel.%sID added to pkg/kernel/proj_ids.go\n", entityName)
 	Dim.Printf("  + %s injected into cmd/container.go\n", entityName)
-	Dim.Printf("  + %s routes injected into cmd/server.go\n", entityName)
+	Dim.Printf("  + %s routes registered at /api/v1/%s\n", entityName, tableName)
 	fmt.Println()
 	Dim.Println("  Next steps:")
 	fmt.Println()
-	Cyan.Println("    1. Customize entity fields")
-	Cyan.Println("    2. Review wiring in " + domainPath + "/" + pkgName + "container/container.go")
-	Cyan.Println("    3. Create migration in migrations/")
+	fmt.Printf("    %s Add fields to %s\n", Cyan.Sprint("1."), Bold.Sprint(domainPath+"/"+pkgName+".go"))
+	fmt.Printf("    %s Update the SQL in %s to match your fields\n", Cyan.Sprint("2."), Bold.Sprint(domainPath+"/"+pkgName+"infra/postgres.go"))
+	fmt.Printf("    %s Create a migration:\n", Cyan.Sprint("3."))
+	fmt.Println()
+	Dim.Printf("       CREATE TABLE %s (\n", tableName)
+	Dim.Println("           id         TEXT PRIMARY KEY,")
+	Dim.Println("           tenant_id  TEXT NOT NULL REFERENCES tenants(id),")
+	Dim.Println("           -- add your fields here")
+	Dim.Println("           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),")
+	Dim.Println("           updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()")
+	Dim.Println("       );")
 	fmt.Println()
 }
 
-func PrintWireSuccess(moduleName string, modifiedFiles []string) {
+func PrintWireSuccess(moduleName string, modifiedFiles []string, bridges []string) {
 	fmt.Println()
 	Green.Println("  Success!", White.Sprintf(" Wired %s", moduleName))
 	fmt.Println()
@@ -175,6 +205,12 @@ func PrintWireSuccess(moduleName string, modifiedFiles []string) {
 		Dim.Println("  Modified files:")
 		for _, f := range modifiedFiles {
 			fmt.Printf("    %s %s\n", Green.Sprint("~"), Cyan.Sprint(f))
+		}
+		fmt.Println()
+	}
+	if len(bridges) > 0 {
+		for _, b := range bridges {
+			fmt.Printf("    %s Bridge: %s + %s auto-connected\n", Magenta.Sprint("⚡"), moduleName, b)
 		}
 		fmt.Println()
 	}

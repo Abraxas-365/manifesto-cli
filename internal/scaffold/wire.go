@@ -19,9 +19,15 @@ type WireOptions struct {
 	WiredModules []string // Already wired modules (for bridge detection)
 }
 
+// WireResult holds the outcome of a wire operation.
+type WireResult struct {
+	ModifiedFiles   []string
+	ActivatedBridges []string
+}
+
 // WireModule wires a module into the project by injecting code at marker points
-// in config.go, container.go, server.go, and Makefile. Returns the list of modified files.
-func WireModule(opts WireOptions) ([]string, error) {
+// in config.go, container.go, server.go, and Makefile. Returns the result.
+func WireModule(opts WireOptions) (*WireResult, error) {
 	spec, ok := config.WireableModuleRegistry[opts.ModuleName]
 	if !ok {
 		return nil, fmt.Errorf("unknown wireable module: %s", opts.ModuleName)
@@ -30,28 +36,28 @@ func WireModule(opts WireOptions) ([]string, error) {
 	// Replace placeholders with actual project values.
 	spec = replacePlaceholders(spec, opts.GoModule, opts.ProjectName)
 
-	var modified []string
+	result := &WireResult{}
 
 	// 1. Inject into pkg/config/config.go
 	if spec.ConfigFields != "" || spec.ConfigLoads != "" {
 		if err := injectWireConfig(opts.ProjectRoot, spec); err != nil {
 			return nil, fmt.Errorf("wire config: %w", err)
 		}
-		modified = append(modified, "pkg/config/config.go")
+		result.ModifiedFiles = append(result.ModifiedFiles, "pkg/config/config.go")
 	}
 
 	// 2. Inject into cmd/container.go
 	if err := injectWireContainer(opts.ProjectRoot, spec); err != nil {
 		return nil, fmt.Errorf("wire container: %w", err)
 	}
-	modified = append(modified, "cmd/container.go")
+	result.ModifiedFiles = append(result.ModifiedFiles, "cmd/container.go")
 
 	// 3. Inject into cmd/server.go (if module has server injections)
 	if spec.PublicRoutes != "" || spec.RouteRegistration != "" || spec.AuthMiddleware != "" || spec.ServerImports != "" {
 		if err := injectWireServer(opts.ProjectRoot, spec); err != nil {
 			return nil, fmt.Errorf("wire server: %w", err)
 		}
-		modified = append(modified, "cmd/server.go")
+		result.ModifiedFiles = append(result.ModifiedFiles, "cmd/server.go")
 	}
 
 	// 4. Inject into Makefile
@@ -59,7 +65,7 @@ func WireModule(opts WireOptions) ([]string, error) {
 		if err := injectIntoMakefile(opts.ProjectRoot, spec); err != nil {
 			return nil, fmt.Errorf("wire makefile: %w", err)
 		}
-		modified = append(modified, "Makefile")
+		result.ModifiedFiles = append(result.ModifiedFiles, "Makefile")
 	}
 
 	// 5. Check cross-module bridges
@@ -69,6 +75,7 @@ func WireModule(opts WireOptions) ([]string, error) {
 			if err := injectBridge(opts.ProjectRoot, bridgeSpec); err != nil {
 				return nil, fmt.Errorf("wire bridge (%s+%s): %w", opts.ModuleName, bridge.RequiresModule, err)
 			}
+			result.ActivatedBridges = append(result.ActivatedBridges, bridge.RequiresModule)
 		}
 	}
 
@@ -79,7 +86,7 @@ func WireModule(opts WireOptions) ([]string, error) {
 		}
 	}
 
-	return modified, nil
+	return result, nil
 }
 
 // PostProcessConfigFile inserts wiring markers into the fetched config.go file.
@@ -365,6 +372,12 @@ func injectBridge(projectRoot string, bridge config.Bridge) error {
 		text = strings.Replace(text, "// manifesto:module-init", initLine, 1)
 	}
 
+	// Inject bridge helpers
+	if bridge.ContainerHelpers != "" {
+		helperLine := bridge.ContainerHelpers + "\n\n// manifesto:container-helpers"
+		text = strings.Replace(text, "// manifesto:container-helpers", helperLine, 1)
+	}
+
 	return os.WriteFile(containerFile, []byte(text), 0644)
 }
 
@@ -432,6 +445,7 @@ func replacePlaceholders(spec config.WireableModule, goModule, projectName strin
 	for i, bridge := range spec.Bridges {
 		spec.Bridges[i].ContainerImports = r(bridge.ContainerImports)
 		spec.Bridges[i].ContainerInit = r(bridge.ContainerInit)
+		spec.Bridges[i].ContainerHelpers = r(bridge.ContainerHelpers)
 	}
 
 	return spec
@@ -445,6 +459,7 @@ func replaceBridgePlaceholders(bridge config.Bridge, goModule, projectName strin
 	}
 	bridge.ContainerImports = r(bridge.ContainerImports)
 	bridge.ContainerInit = r(bridge.ContainerInit)
+	bridge.ContainerHelpers = r(bridge.ContainerHelpers)
 	return bridge
 }
 
