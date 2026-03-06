@@ -84,8 +84,8 @@ func MultiSelect(title string, items []SelectableItem) ([]string, error) {
 	}
 
 	clearRender := func() {
-		// lines = title(1) + help(1) + blank(1) + items(len) + blank(1) + selected(1)
-		totalLines := 3 + len(items) + 2
+		// lines = title(1) + help(1) + blank(1) + items(len) + blank(1) + selected(1) + trailing newline(1)
+		totalLines := 3 + len(items) + 3
 		for i := 0; i < totalLines; i++ {
 			fmt.Print("\033[2K") // Clear line
 			if i < totalLines-1 {
