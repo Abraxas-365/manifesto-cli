@@ -53,9 +53,9 @@ var WireableModuleRegistry = map[string]WireableModule{
 
 		RequiredModules: []string{"fsx"},
 
-		ContainerImports: `	"{{GOMODULE}}/pkg/fsx"
-	"{{GOMODULE}}/pkg/fsx/fsxlocal"
-	"{{GOMODULE}}/pkg/fsx/fsxs3"
+		ContainerImports: `	"{{GOMODULE}}/internal/fsx"
+	"{{GOMODULE}}/internal/fsx/fsxlocal"
+	"{{GOMODULE}}/internal/fsx/fsxs3"
 	awsConfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"`,
 
@@ -137,8 +137,8 @@ export AWS_BUCKET = {{PROJECTNAME}}-uploads`,
 		ConfigFields: `	Jobx JobxConfig`,
 		ConfigLoads:  `	cfg.Jobx = loadJobxConfig()`,
 
-		ContainerImports: `	"{{GOMODULE}}/pkg/jobx"
-	"{{GOMODULE}}/pkg/jobx/jobxredis"`,
+		ContainerImports: `	"{{GOMODULE}}/internal/jobx"
+	"{{GOMODULE}}/internal/jobx/jobxredis"`,
 		ContainerFields: `	JobClient *jobx.Client`,
 		ModuleInit:      `	c.initJobx()`,
 		BackgroundStart: `	go c.JobClient.Start(ctx)`,
@@ -182,9 +182,9 @@ export JOBX_DEFAULT_RETRY_DELAY = 30s`,
 		ConfigFields: `	Notifx NotifxConfig`,
 		ConfigLoads:  `	cfg.Notifx = loadNotifxConfig()`,
 
-		ContainerImports: `	"{{GOMODULE}}/pkg/notifx"
-	"{{GOMODULE}}/pkg/notifx/notifxses"
-	"{{GOMODULE}}/pkg/notifx/notifxconsole"
+		ContainerImports: `	"{{GOMODULE}}/internal/notifx"
+	"{{GOMODULE}}/internal/notifx/notifxses"
+	"{{GOMODULE}}/internal/notifx/notifxconsole"
 	awsConfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ses"`,
 		ContainerFields: `	NotifxClient *notifx.Client`,
@@ -241,8 +241,8 @@ export NOTIFX_AWS_REGION = us-east-1`,
 		ConfigFields: ``,
 		ConfigLoads:  ``,
 
-		ContainerImports: `	"{{GOMODULE}}/pkg/iam/iamcontainer"
-	"{{GOMODULE}}/pkg/kernel"`,
+		ContainerImports: `	"{{GOMODULE}}/internal/iam/iamcontainer"
+	"{{GOMODULE}}/internal/kernel"`,
 		ContainerFields:  `	IAM *iamcontainer.Container`,
 		ModuleInit: `	c.IAM = iamcontainer.New(iamcontainer.Deps{
 		DB:                 c.DB,
@@ -438,7 +438,7 @@ export TENANT_MAX_USERS_ENTERPRISE = 500`,
 		Bridges: []Bridge{
 			{
 				RequiresModule:   "notifx",
-				ContainerImports: `	"{{GOMODULE}}/pkg/notifx"`,
+				ContainerImports: `	"{{GOMODULE}}/internal/notifx"`,
 				ContainerInit: `	// Bridge: iam + notifx — use notifx for OTP and invitation emails
 	c.IAM = iamcontainer.New(iamcontainer.Deps{
 		DB:                 c.DB,

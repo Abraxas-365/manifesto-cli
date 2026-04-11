@@ -41,27 +41,27 @@ type Module struct {
 var ModuleRegistry = map[string]Module{
 	"kernel": {
 		Name: "kernel", Description: "Domain primitives, value objects, pagination, UoW",
-		Paths: []string{"pkg/kernel"}, Core: true,
+		Paths: []string{"internal/kernel"}, Core: true,
 	},
 	"errx": {
 		Name: "errx", Description: "Structured error handling with HTTP mapping",
-		Paths: []string{"pkg/errx"}, Core: true,
+		Paths: []string{"internal/errx"}, Core: true,
 	},
 	"logx": {
 		Name: "logx", Description: "Structured logging (console/JSON)",
-		Paths: []string{"pkg/logx"}, Core: true,
+		Paths: []string{"internal/logx"}, Core: true,
 	},
 	"ptrx": {
 		Name: "ptrx", Description: "Pointer utility helpers",
-		Paths: []string{"pkg/ptrx"}, Core: true,
+		Paths: []string{"internal/ptrx"}, Core: true,
 	},
 	"asyncx": {
 		Name: "asyncx", Description: "Async primitives: futures, fan-out, pools, retry, timeout",
-		Paths: []string{"pkg/asyncx"}, Core: false,
+		Paths: []string{"internal/asyncx"}, Core: false,
 	},
 	"config": {
 		Name: "config", Description: "Environment-driven configuration",
-		Paths: []string{"pkg/config"}, Core: true,
+		Paths: []string{"internal/config"}, Core: true,
 	},
 	"server": {
 		Name: "server", Description: "Server, container, Makefile, docker-compose (templated)",
@@ -73,23 +73,23 @@ var ModuleRegistry = map[string]Module{
 	},
 	"iam": {
 		Name: "iam", Description: "Auth, users, tenants, scopes, API keys",
-		Paths: []string{"pkg/iam"}, Core: false,
+		Paths: []string{"internal/iam"}, Core: false,
 	},
 	"fsx": {
 		Name: "fsx", Description: "File system abstraction (local, S3)",
-		Paths: []string{"pkg/fsx"}, Core: false,
+		Paths: []string{"internal/fsx"}, Core: false,
 	},
 	"ai": {
 		Name: "ai", Description: "LLM, embeddings, vector store, OCR, speech",
-		Paths: []string{"pkg/ai"}, Core: false, Deps: []string{"fsx"},
+		Paths: []string{"internal/ai"}, Core: false, Deps: []string{"fsx"},
 	},
 	"jobx": {
 		Name: "jobx", Description: "Async job queue (Redis-backed dispatcher)",
-		Paths: []string{"pkg/jobx"}, Core: false, Deps: []string{"asyncx"},
+		Paths: []string{"internal/jobx"}, Core: false, Deps: []string{"asyncx"},
 	},
 	"notifx": {
 		Name: "notifx", Description: "Email notifications (AWS SES)",
-		Paths: []string{"pkg/notifx"}, Core: false,
+		Paths: []string{"internal/notifx"}, Core: false,
 	},
 }
 
