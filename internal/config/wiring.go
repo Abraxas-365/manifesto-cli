@@ -6,7 +6,7 @@ type WireableModule struct {
 	Name        string
 	Description string
 
-	// Config injection (pkg/config/config.go)
+	// Config injection (internal/config/config.go)
 	ConfigFields string // Struct fields to add
 	ConfigLoads  string // Load() assignments to add
 

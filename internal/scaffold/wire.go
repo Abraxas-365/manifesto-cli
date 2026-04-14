@@ -38,12 +38,12 @@ func WireModule(opts WireOptions) (*WireResult, error) {
 
 	result := &WireResult{}
 
-	// 1. Inject into pkg/config/config.go
+	// 1. Inject into internal/config/config.go
 	if spec.ConfigFields != "" || spec.ConfigLoads != "" {
 		if err := injectWireConfig(opts.ProjectRoot, spec); err != nil {
 			return nil, fmt.Errorf("wire config: %w", err)
 		}
-		result.ModifiedFiles = append(result.ModifiedFiles, "pkg/config/config.go")
+		result.ModifiedFiles = append(result.ModifiedFiles, "internal/config/config.go")
 	}
 
 	// 2. Inject into cmd/container.go
@@ -92,7 +92,7 @@ func WireModule(opts WireOptions) (*WireResult, error) {
 // PostProcessConfigFile inserts wiring markers into the fetched config.go file.
 // Called once after init to prepare the file for future module wiring.
 func PostProcessConfigFile(projectRoot string) error {
-	configFile := filepath.Join(projectRoot, "pkg", "config", "config.go")
+	configFile := filepath.Join(projectRoot, "internal", "config", "config.go")
 
 	content, err := os.ReadFile(configFile)
 	if err != nil {
@@ -124,7 +124,7 @@ func PostProcessConfigFile(projectRoot string) error {
 // ---------------------------------------------------------------------------
 
 func injectWireConfig(projectRoot string, spec config.WireableModule) error {
-	configFile := filepath.Join(projectRoot, "pkg", "config", "config.go")
+	configFile := filepath.Join(projectRoot, "internal", "config", "config.go")
 
 	content, err := os.ReadFile(configFile)
 	if err != nil {
