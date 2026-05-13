@@ -213,7 +213,7 @@ func renderToString(tmplPath string, data any) (string, error) {
 }
 
 func appendKernelIDs(projectRoot, snippet string) error {
-	idFile := filepath.Join(projectRoot, "pkg", "kernel", "proj_ids.go")
+	idFile := filepath.Join(projectRoot, "internal", "kernel", "proj_ids.go")
 
 	if _, err := os.Stat(idFile); os.IsNotExist(err) {
 		if err := os.MkdirAll(filepath.Dir(idFile), 0755); err != nil {
