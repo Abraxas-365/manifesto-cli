@@ -433,7 +433,19 @@ export TENANT_MAX_USERS_ENTERPRISE = 500`,
 	logx.Info("  > API key routes registered")
 
 	container.IAM.InvitationHandlers.RegisterRoutes(protected, container.IAM.UnifiedAuthMiddleware)
-	logx.Info("  > Invitation routes registered")`,
+	logx.Info("  > Invitation routes registered")
+
+	container.IAM.RoleHandlers.RegisterRoutes(protected, container.IAM.UnifiedAuthMiddleware)
+	logx.Info("  > Role routes registered")
+
+	container.IAM.ScopeHandlers.RegisterRoutes(protected, container.IAM.UnifiedAuthMiddleware)
+	logx.Info("  > Scope routes registered")
+
+	container.IAM.UserHandlers.RegisterRoutes(protected, container.IAM.UnifiedAuthMiddleware)
+	logx.Info("  > User routes registered")
+
+	container.IAM.TenantHandlers.RegisterRoutes(protected, container.IAM.UnifiedAuthMiddleware)
+	logx.Info("  > Tenant routes registered")`,
 
 		Bridges: []Bridge{
 			{
