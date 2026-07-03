@@ -45,13 +45,14 @@ func InitProject(opts InitOptions) error {
 	allModules := config.ResolveDeps(opts.Modules)
 
 	// Collect remote paths to fetch from GitHub.
-	var allPaths []string
+	var allPaths, excludePaths []string
 	for _, modName := range allModules {
 		mod, ok := config.ModuleRegistry[modName]
 		if !ok {
 			return fmt.Errorf("unknown module: %s", modName)
 		}
 		allPaths = append(allPaths, mod.Paths...)
+		excludePaths = append(excludePaths, mod.ExcludePaths...)
 	}
 
 	client := remote.NewClient("")
@@ -74,7 +75,7 @@ func InitProject(opts InitOptions) error {
 	if len(allPaths) > 0 {
 		spin := ui.NewStepSpinner(step, totalSteps, fmt.Sprintf("Downloading manifesto@%s...", ref))
 		spin.Start()
-		err := client.FetchModulePaths(ref, allPaths, projectRoot, ManifestoGoModule, opts.GoModule)
+		err := client.FetchModulePaths(ref, allPaths, excludePaths, projectRoot, ManifestoGoModule, opts.GoModule)
 		if err != nil {
 			spin.Stop(false)
 			os.RemoveAll(projectRoot)
@@ -247,7 +248,7 @@ func generateGoMod(projectRoot, goModule string, client *remote.Client, ref stri
 // It updates the manifest's Modules map for each newly downloaded module.
 func EnsureModulesPresent(projectRoot string, manifest *config.Manifest, requiredModules []string, client *remote.Client, ref string) error {
 	var toDownload []string
-	var allPaths []string
+	var allPaths, excludePaths []string
 
 	resolved := config.ResolveDeps(requiredModules)
 
@@ -261,13 +262,14 @@ func EnsureModulesPresent(projectRoot string, manifest *config.Manifest, require
 		}
 		toDownload = append(toDownload, modName)
 		allPaths = append(allPaths, mod.Paths...)
+		excludePaths = append(excludePaths, mod.ExcludePaths...)
 	}
 
 	if len(toDownload) == 0 {
 		return nil
 	}
 
-	if err := client.FetchModulePaths(ref, allPaths, projectRoot, ManifestoGoModule, manifest.Project.GoModule); err != nil {
+	if err := client.FetchModulePaths(ref, allPaths, excludePaths, projectRoot, ManifestoGoModule, manifest.Project.GoModule); err != nil {
 		return fmt.Errorf("download modules: %w", err)
 	}
 

@@ -31,11 +31,12 @@ type ModuleConfig struct {
 }
 
 type Module struct {
-	Name        string
-	Description string
-	Paths       []string // Remote paths fetched from GitHub
-	Deps        []string
-	Core        bool
+	Name         string
+	Description  string
+	Paths        []string // Remote paths fetched from GitHub
+	ExcludePaths []string // Paths (prefixes) skipped even if under Paths
+	Deps         []string
+	Core         bool
 }
 
 var ModuleRegistry = map[string]Module{
@@ -81,7 +82,9 @@ var ModuleRegistry = map[string]Module{
 	},
 	"ai": {
 		Name: "ai", Description: "AI agent harness: providers, tools, backends, skills, subagents",
-		Paths: []string{"internal/ai"}, Core: false, Deps: []string{"fsx"},
+		Paths:        []string{"internal/ai"},
+		ExcludePaths: []string{"internal/ai/harness/examples", "internal/ai/harness/docs"},
+		Core:         false, Deps: []string{"fsx"},
 	},
 	"jobx": {
 		Name: "jobx", Description: "Async job queue (Redis-backed dispatcher)",

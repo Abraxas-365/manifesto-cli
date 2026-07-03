@@ -59,9 +59,10 @@ func (c *Client) GetLatestVersion() (string, error) {
 	return release.TagName, nil
 }
 
-// FetchModulePaths downloads the repo at ref and extracts only the given paths.
-// It rewrites Go imports from goModuleOld to goModuleNew.
-func (c *Client) FetchModulePaths(ref string, paths []string, destRoot, goModuleOld, goModuleNew string) error {
+// FetchModulePaths downloads the repo at ref and extracts only the given paths,
+// skipping anything under excludePaths. It rewrites Go imports from goModuleOld
+// to goModuleNew.
+func (c *Client) FetchModulePaths(ref string, paths, excludePaths []string, destRoot, goModuleOld, goModuleNew string) error {
 	archiveData, err := c.downloadArchive(ref)
 	if err != nil {
 		return err
@@ -92,6 +93,9 @@ func (c *Client) FetchModulePaths(ref string, paths []string, destRoot, goModule
 		relPath := parts[1]
 
 		if !matchesAnyPrefix(relPath, paths) {
+			continue
+		}
+		if matchesAnyPrefix(relPath, excludePaths) {
 			continue
 		}
 

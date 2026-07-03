@@ -39,9 +39,10 @@ func InstallModule(opts InstallOptions) error {
 	}
 
 	// Collect paths.
-	var allPaths []string
+	var allPaths, excludePaths []string
 	for _, name := range toInstall {
 		allPaths = append(allPaths, config.ModuleRegistry[name].Paths...)
+		excludePaths = append(excludePaths, config.ModuleRegistry[name].ExcludePaths...)
 	}
 
 	// Determine ref.
@@ -62,7 +63,7 @@ func InstallModule(opts InstallOptions) error {
 	spin.Start()
 
 	client := remote.NewClient("")
-	if err := client.FetchModulePaths(ref, allPaths, opts.ProjectRoot, ManifestoGoModule, manifest.Project.GoModule); err != nil {
+	if err := client.FetchModulePaths(ref, allPaths, excludePaths, opts.ProjectRoot, ManifestoGoModule, manifest.Project.GoModule); err != nil {
 		spin.Stop(false)
 		return fmt.Errorf("fetch module: %w", err)
 	}
