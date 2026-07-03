@@ -43,7 +43,7 @@ Modules are downloaded and wired into your project's container, config, server, 
 |--------|-----------------|
 | `fsx` | File system abstraction — local disk or S3 with storage config |
 | `asyncx` | Futures, fan-out, pools, retry, timeout patterns |
-| `ai` | LLM clients, embeddings, vector store, OCR, speech (requires fsx) |
+| `ai` | AI agent harness: providers, tools, backends, skills, subagents (requires fsx) |
 | `jobx` | Async job queue — Redis-backed dispatcher (requires asyncx) |
 | `notifx` | Email notifications — SES notifier with email config |
 | `iam` | Full auth system — OAuth, passwordless OTP, JWT, API keys, RBAC, multi-tenant users, sessions, invitations |

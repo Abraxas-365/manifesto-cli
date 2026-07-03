@@ -123,7 +123,7 @@ export AWS_BUCKET = {{PROJECTNAME}}-uploads`,
 
 	"ai": {
 		Name:        "ai",
-		Description: "LLM, embeddings, vector store, OCR, speech",
+		Description: "AI agent harness: providers, tools, backends, skills, subagents",
 
 		RequiredModules: []string{"ai", "fsx"},
 	},

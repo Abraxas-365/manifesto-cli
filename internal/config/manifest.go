@@ -80,7 +80,7 @@ var ModuleRegistry = map[string]Module{
 		Paths: []string{"internal/fsx"}, Core: false,
 	},
 	"ai": {
-		Name: "ai", Description: "LLM, embeddings, vector store, OCR, speech",
+		Name: "ai", Description: "AI agent harness: providers, tools, backends, skills, subagents",
 		Paths: []string{"internal/ai"}, Core: false, Deps: []string{"fsx"},
 	},
 	"jobx": {

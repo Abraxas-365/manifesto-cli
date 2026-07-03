@@ -30,7 +30,7 @@ Core libraries are included by default (kernel, errx, logx, ptrx, config).
 Modules can be added during init or later with 'manifesto add':
   fsx     File system abstraction (local, S3)
   asyncx  Async primitives (futures, fan-out, pools, retry)
-  ai      LLM, embeddings, vector store, OCR, speech
+  ai      AI agent harness (providers, tools, backends, skills, subagents)
   jobx    Async job processing (Redis-backed dispatcher)
   notifx  Email notifications (AWS SES)
   iam     Identity & Access Management
